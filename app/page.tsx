@@ -43,20 +43,24 @@ export default function Home() {
 
           {/* Action Buttons */}
           <div className="flex gap-6 justify-center items-center">
+            {/* Get Started Button */}
             <button className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-white font-semibold text-lg overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(168,85,247,0.6)]">
               <span className="relative z-10 flex items-center gap-2">
                 Get Started
                 <Zap className="size-5 group-hover:scale-110 transition-transform fill-current" />
               </span>
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+             <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
 
-            <button className="group relative px-8 py-4 bg-white/10 backdrop-blur-lg border-2 border-white/30 rounded-full text-white font-semibold text-lg overflow-hidden transition-all duration-300 hover:scale-105 hover:bg-white/20 hover:border-white/50">
-              <span className="relative z-10 flex items-center gap-2">
-                Login
-                <ArrowRight className="size-5 group-hover:translate-x-1 transition-transform" />
-              </span>
-            </button>
+            {/* Login Button Wrapped in Link */}
+            <Link href="/login">
+              <button className="group relative px-8 py-4 bg-white/10 backdrop-blur-lg border-2 border-white/30 rounded-full text-white font-semibold text-lg overflow-hidden transition-all duration-300 hover:scale-105 hover:bg-white/20 hover:border-white/50">
+                <span className="relative z-10 flex items-center gap-2">
+                  Login
+                  <ArrowRight className="size-5 group-hover:translate-x-1 transition-transform" />
+                </span>
+              </button>
+            </Link>
           </div>
         </section>
 
