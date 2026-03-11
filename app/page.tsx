@@ -1,7 +1,6 @@
-import { ArrowRight, Zap } from "lucide-react";
+import { ArrowRight, Zap, Music, Shield, Cpu } from "lucide-react";
 import Link from "next/link";
 
-//The Navbar
 const Navbar = () => (
   <nav className="fixed top-0 w-full z-50 px-10 py-6 flex justify-between items-center backdrop-blur-md bg-black/10 border-b border-white/5">
     <div className="flex-1">
@@ -9,7 +8,6 @@ const Navbar = () => (
     </div>
     <div className="hidden md:flex flex-1 justify-center items-center gap-10">
       <a href="#about" className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors">About</a>
-      <a href="#pricing" className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors">Pricing</a>
       <a href="#contact" className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors">Contact Us</a>
     </div>
     <div className="flex-1 flex justify-end">
@@ -20,7 +18,6 @@ const Navbar = () => (
   </nav>
 );
 
-//The Main Page
 export default function Home() {
   return (
     <>
@@ -28,12 +25,12 @@ export default function Home() {
       
       <main className="bg-gradient-to-br from-purple-900 via-black to-blue-900 text-white min-h-screen scroll-smooth">
         
-        <section className="h-[90vh] flex flex-col items-center justify-center px-6">
-          <div className="flex flex-col items-center mb-12">
+        <section className="h-[85vh] flex flex-col items-center justify-center px-6">
+          <div className="flex flex-col items-center mb-12 text-center">
             <h2 className="text-4xl font-light tracking-[0.2em] uppercase text-purple-400 mb-2">
               Nexora
             </h2>
-            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-center leading-tight">
+            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-tight">
               Your Entire DJ Business <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
                 Synced. Performance-Ready.
@@ -41,18 +38,17 @@ export default function Home() {
             </h1>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-6 justify-center items-center">
-            {/* Get Started Button */}
-            <button className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-white font-semibold text-lg overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(168,85,247,0.6)]">
-              <span className="relative z-10 flex items-center gap-2">
-                Get Started
-                <Zap className="size-5 group-hover:scale-110 transition-transform fill-current" />
-              </span>
-             <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </button>
+            <Link href="/signup">
+              <button className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-white font-semibold text-lg overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(168,85,247,0.6)]">
+                <span className="relative z-10 flex items-center gap-2">
+                  Get Started
+                  <Zap className="size-5 group-hover:scale-110 transition-transform fill-current" />
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            </Link>
 
-            {/* Login Button Wrapped in Link */}
             <Link href="/login">
               <button className="group relative px-8 py-4 bg-white/10 backdrop-blur-lg border-2 border-white/30 rounded-full text-white font-semibold text-lg overflow-hidden transition-all duration-300 hover:scale-105 hover:bg-white/20 hover:border-white/50">
                 <span className="relative z-10 flex items-center gap-2">
@@ -64,8 +60,51 @@ export default function Home() {
           </div>
         </section>
 
+        <section id="about" className="py-24 px-6 max-w-7xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            <div>
+              <h2 className="text-5xl font-bold mb-8 leading-tight">
+                One Platform. <br />
+                <span className="text-purple-400">Infinite Control.</span>
+              </h2>
+              <p className="text-gray-300 text-lg leading-relaxed mb-8">
+                Nexora was born from the chaos of managing a growing DJ career. We realized that juggling Serato crates, Excel spreadsheets for equipment, and email threads for contracts was slowing us down. 🎧
+              </p>
+              <div className="space-y-6">
+                <div className="flex gap-4">
+                  <div className="p-3 bg-purple-600/20 rounded-xl border border-purple-500/30">
+                    <Music className="text-purple-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white">Performance-First Tools</h4>
+                    <p className="text-gray-400 text-sm">Automate your file management and crate curation with AI-driven insights.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="p-3 bg-blue-600/20 rounded-xl border border-blue-500/30">
+                    <Shield className="text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white">Enterprise-Grade CRM</h4>
+                    <p className="text-gray-400 text-sm">Professional contracts, invoices, and client portals that reflect your brand.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-10 relative overflow-hidden">
+              <div className="absolute -top-24 -right-24 size-64 bg-purple-600/20 blur-[100px]" />
+              <Cpu className="size-12 text-purple-400 mb-6" />
+              <h3 className="text-2xl font-bold text-white mb-4">The Mission</h3>
+              <p className="text-gray-300 leading-relaxed">
+                Our goal is to give every DJ—from solo acts to full-scale production companies—the same tools used by industry giants. We handle the logistical heavy lifting so you can stay focused on the mix.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* CONTACT SECTION */}
-        <section id="contact" className="pt-16 pb-24 px-6 flex flex-col items-center">
+        <section id="contact" className="min-h-screen flex flex-col items-center justify-center px-6 ">
           <div className="text-center mb-16">
             <h2 className="text-5xl font-bold mb-6">Contact Us</h2>
             <p className="text-gray-400 max-w-lg text-lg">
