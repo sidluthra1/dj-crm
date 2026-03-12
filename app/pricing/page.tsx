@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 import { Check, Zap, Star, Shield, Users, Plus } from "lucide-react";
 
 export default function PricingPage() {
+  const router = useRouter();
+  const supabase = createClient();
+  
+  // Track which tier is currently being saved to the database
+  const [updatingTier, setUpdatingTier] = useState<string | null>(null);
 
   useEffect(() => {
     if ('scrollRestoration' in window.history) {
@@ -20,6 +27,35 @@ export default function PricingPage() {
     if (element) {
       element.scrollIntoView({ behavior: 'smooth' });
     }
+  };
+
+  // THE NEW LOGIC: Save the tier to Supabase and route the user
+  const handleTierSelect = async (tier: string) => {
+    setUpdatingTier(tier);
+    
+    // 1. Check if they are logged in
+    const { data: { session } } = await supabase.auth.getSession();
+
+    // If not logged in, send them to signup first
+    if (!session) {
+      router.push("/signup");
+      return;
+    }
+
+    // 2. Update their profile in the database
+    const { error } = await supabase
+      .from('profiles')
+      .update({ subscription_tier: tier })
+      .eq('id', session.user.id);
+
+    if (error) {
+      console.error("Failed to update tier:", error.message);
+      setUpdatingTier(null);
+      return;
+    }
+
+    // 3. Send them to the dashboard! 
+    router.push("/dashboard");
   };
 
   return (
@@ -51,6 +87,8 @@ export default function PricingPage() {
               "Spotify Downloader (1 song/day, 1 playlist/week)"
             ]}
             buttonText="Get Started"
+            onButtonClick={() => handleTierSelect('free')}
+            isLoading={updatingTier === 'free'}
           />
 
           {/* PREMIUM TIER */}
@@ -70,6 +108,8 @@ export default function PricingPage() {
               "Serato <-> Rekordbox XML Conversion"
             ]}
             buttonText="Go Premium"
+            onButtonClick={() => handleTierSelect('premium')}
+            isLoading={updatingTier === 'premium'}
           />
 
           {/* CRM ACCESS */}
@@ -81,15 +121,17 @@ export default function PricingPage() {
             subtext="For 8+ bookings/mo or gear inventory owners."
             icon={<Shield className="text-blue-400" />}
             features={[
-              "Includes all Free Tools (Premium tools upgrade available anytime after purchase)", //
+              "Includes all Free Tools (Premium tools upgrade available anytime after purchase)",
               "AI Generated Contracts & Invoices",
               "Calendar & Event Management",
               "Client Portal",
               "Inventory Tracking"
             ]}
             buttonText="Unlock CRM"
-            isCombo={true} //
+            isCombo={true}
             footer="Upgrade to premium tools available in your dashboard after purchase"
+            onButtonClick={() => handleTierSelect('crm')}
+            isLoading={updatingTier === 'crm'}
           />
 
           {/* COMPANY TIER */}
@@ -106,7 +148,7 @@ export default function PricingPage() {
               "Assign staff to events & track performance"
             ]}
             buttonText="Contact Sales"
-            onButtonClick={scrollToContact} // Fixes the scroll issue
+            onButtonClick={scrollToContact} 
           />
         </div>
 
@@ -126,14 +168,16 @@ export default function PricingPage() {
   );
 }
 
-function PricingCard({ title, description, price, period, subtext, features, icon, buttonText, highlight = false, isCombo = false, footer, buttonHref = "/signup", onButtonClick }: any) {
+function PricingCard({ title, description, price, period, subtext, features, icon, buttonText, highlight = false, isCombo = false, footer, buttonHref = "/signup", onButtonClick, isLoading = false }: any) {
+  // Consolidate the styling so both buttons and links get the correct highlight colors!
+  const btnStyle = `w-full py-4 rounded-full font-bold transition-all ${highlight ? 'bg-purple-600 hover:bg-purple-700 text-white' : isCombo ? 'bg-blue-600/20 hover:bg-blue-600/40 text-white border border-blue-500/30' : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`;
+
   return (
-    <div className={`relative flex flex-col p-8 rounded-[2.5rem] border transition-all duration-300 hover:scale-[1.02] ${highlight ? 'bg-white/15 border-purple-500 shadow-[0_0_40px_rgba(168,85,247,0.2)]' : 'bg-white/5 border-white/10'} ${isCombo ? 'border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.1)]' : ''}`}>
-      {highlight && <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-purple-500 text-xs font-bold px-4 py-1 rounded-full uppercase tracking-tighter shadow-lg">Most Popular</div>}
+    <div className={`relative flex flex-col p-8 rounded-[2.5rem] border transition-all duration-300 hover:scale-[1.02] flex-1 ${highlight ? 'bg-white/15 border-purple-500 shadow-[0_0_40px_rgba(168,85,247,0.2)]' : 'bg-white/5 border-white/10'} ${isCombo ? 'border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.1)]' : ''}`}>
+      {highlight && <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-purple-500 text-xs font-bold px-4 py-1 rounded-full uppercase tracking-tighter shadow-lg w-max whitespace-nowrap">Most Popular</div>}
       
-      {/* Visual Badge for Combo Clarity */}
       {isCombo && (
-        <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 shadow-lg">
+        <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest flex items-center gap-1 shadow-lg w-max whitespace-nowrap">
           <Plus size={10} strokeWidth={4} /> Premium Add-on Available
         </div>
       )}
@@ -158,20 +202,23 @@ function PricingCard({ title, description, price, period, subtext, features, ico
         ))}
       </div>
 
-      {onButtonClick ? (
-        <button 
-          onClick={onButtonClick}
-          className="w-full py-4 rounded-full font-bold bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all"
-        >
-          {buttonText}
-        </button>
-      ) : (
-        <Link href={buttonHref} className="mt-auto">
-          <button className={`w-full py-4 rounded-full font-bold transition-all ${highlight ? 'bg-purple-600 hover:bg-purple-700 text-white' : isCombo ? 'bg-blue-600/20 hover:bg-blue-600/40 text-white border border-blue-500/30' : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'}`}>
-            {buttonText}
+      <div className="mt-auto">
+        {onButtonClick ? (
+          <button 
+            onClick={onButtonClick}
+            disabled={isLoading}
+            className={btnStyle}
+          >
+            {isLoading ? "Processing..." : buttonText}
           </button>
-        </Link>
-      )}
+        ) : (
+          <Link href={buttonHref} className="block">
+            <button className={btnStyle}>
+              {buttonText}
+            </button>
+          </Link>
+        )}
+      </div>
       
       {footer && <p className="mt-4 text-center text-[10px] text-gray-400 font-bold uppercase tracking-[0.15em] leading-relaxed">{footer}</p>}
     </div>

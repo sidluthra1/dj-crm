@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation"; // Added useRouter
+import { createClient } from "@/utils/supabase/client"; // Added Supabase client
 import { 
   Music, 
   LayoutDashboard, 
@@ -21,18 +22,30 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // State for dropdowns
   const [isEventsOpen, setIsEventsOpen] = useState(false);
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+
+  // THE LOGOUT FUNCTION 🚪
+  const handleLogout = async () => {
+    // 1. Tell Supabase to destroy the session
+    await supabase.auth.signOut();
+    
+    // 2. Send them back to the login page
+    router.push("/login");
+    
+    // 3. Force Next.js to refresh so the middleware kicks in immediately
+    router.refresh();
+  };
 
   return (
     <div className="min-h-screen bg-black text-white flex">
       
       {/* SIDEBAR */}
       <aside className="w-64 border-r border-white/10 bg-white/5 backdrop-blur-xl flex flex-col hidden md:flex">
-        {/* Logo Area */}
         <div className="h-20 flex items-center px-8 border-b border-white/10 shrink-0">
           <Link href="/dashboard" className="flex items-center gap-3">
             <Music className="text-purple-400 size-6" />
@@ -40,7 +53,6 @@ export default function DashboardLayout({
           </Link>
         </div>
 
-        {/* Navigation Links */}
         <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto custom-scrollbar">
           <SidebarLink 
             href="/dashboard" 
@@ -132,14 +144,13 @@ export default function DashboardLayout({
                   Spotify Downloader
                 </Link>
 
-                {/* Upsell to Premium Tools */}
                 <div className="pt-3 mt-1 border-t border-white/10">
                   <Link 
                     href="/dashboard/tools/upgrade" 
                     className="flex items-center gap-2 text-[11px] font-black text-pink-400 hover:text-pink-300 transition-colors uppercase tracking-widest"
                   >
                     <Star size={12} className="fill-current" />
-                    Premium Tools Upgrade
+                    Premium Upgrade
                   </Link>
                 </div>
               </div>
@@ -154,7 +165,6 @@ export default function DashboardLayout({
           />
         </nav>
 
-        {/* Bottom Actions */}
         <div className="p-4 border-t border-white/10 space-y-2 shrink-0">
           <SidebarLink 
             href="/dashboard/settings" 
@@ -162,16 +172,18 @@ export default function DashboardLayout({
             label="Settings" 
             active={pathname === "/dashboard/settings"}
           />
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-400 hover:bg-red-500/10 rounded-xl transition-colors">
+          {/* LOGOUT BUTTON WITH onClick HANDLER */}
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
+          >
             <LogOut size={20} />
             Logout
           </button>
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
       <main className="flex-1 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/20 flex flex-col h-screen overflow-hidden">
-        {/* Top Header */}
         <header className="h-20 border-b border-white/10 bg-black/50 backdrop-blur-md flex items-center justify-between px-8 shrink-0">
           <h1 className="text-xl font-bold">Dashboard</h1>
           <div className="flex items-center gap-4">
@@ -181,7 +193,6 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        {/* Dynamic Page Content */}
         <div className="flex-1 overflow-y-auto p-8">
           {children}
         </div>
@@ -190,7 +201,6 @@ export default function DashboardLayout({
   );
 }
 
-// Helper component for cleaner code
 function SidebarLink({ href, icon, label, active = false }: any) {
   return (
     <Link 
