@@ -1,14 +1,19 @@
-// app/dashboard/layout.tsx
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { 
   Music, 
   LayoutDashboard, 
   Calendar, 
-  FileText, 
-  CreditCard, 
   Package, 
   Settings, 
-  LogOut 
+  LogOut,
+  ChevronDown,
+  ChevronUp,
+  Wrench,
+  Star
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -16,13 +21,19 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // State for dropdowns
+  const [isEventsOpen, setIsEventsOpen] = useState(false);
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  
+  const pathname = usePathname();
+
   return (
     <div className="min-h-screen bg-black text-white flex">
       
       {/* SIDEBAR */}
       <aside className="w-64 border-r border-white/10 bg-white/5 backdrop-blur-xl flex flex-col hidden md:flex">
         {/* Logo Area */}
-        <div className="h-20 flex items-center px-8 border-b border-white/10">
+        <div className="h-20 flex items-center px-8 border-b border-white/10 shrink-0">
           <Link href="/dashboard" className="flex items-center gap-3">
             <Music className="text-purple-400 size-6" />
             <span className="text-xl font-light tracking-[0.2em] uppercase">NEXORA</span>
@@ -30,17 +41,127 @@ export default function DashboardLayout({
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 px-4 py-8 space-y-2">
-          <SidebarLink href="/dashboard" icon={<LayoutDashboard size={20} />} label="Overview" active />
-          <SidebarLink href="/dashboard/calendar" icon={<Calendar size={20} />} label="Calendar" />
-          <SidebarLink href="/dashboard/contracts" icon={<FileText size={20} />} label="Contracts" />
-          <SidebarLink href="/dashboard/invoices" icon={<CreditCard size={20} />} label="Invoices" />
-          <SidebarLink href="/dashboard/inventory" icon={<Package size={20} />} label="Inventory" />
+        <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto custom-scrollbar">
+          <SidebarLink 
+            href="/dashboard" 
+            icon={<LayoutDashboard size={20} />} 
+            label="Overview" 
+            active={pathname === "/dashboard"} 
+          />
+          
+          {/* Events Dropdown Menu */}
+          <div>
+            <button 
+              onClick={() => setIsEventsOpen(!isEventsOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+                pathname.includes("/dashboard/events") 
+                  ? "bg-purple-600/20 text-purple-400 border border-purple-500/30" 
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Calendar size={20} />
+                Events
+              </div>
+              {isEventsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {isEventsOpen && (
+              <div className="flex flex-col gap-2 mt-2 pl-11 pr-4">
+                <Link 
+                  href="/dashboard/events/upcoming" 
+                  className={`text-sm font-semibold transition-colors py-1 ${
+                    pathname === "/dashboard/events/upcoming" ? "text-purple-400" : "text-gray-500 hover:text-white"
+                  }`}
+                >
+                  Upcoming Events
+                </Link>
+                <Link 
+                  href="/dashboard/events/previous" 
+                  className={`text-sm font-semibold transition-colors py-1 ${
+                    pathname === "/dashboard/events/previous" ? "text-purple-400" : "text-gray-500 hover:text-white"
+                  }`}
+                >
+                  Previous Events
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Tools Dropdown Menu */}
+          <div>
+            <button 
+              onClick={() => setIsToolsOpen(!isToolsOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+                pathname.includes("/dashboard/tools") 
+                  ? "bg-purple-600/20 text-purple-400 border border-purple-500/30" 
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Wrench size={20} />
+                Tools
+              </div>
+              {isToolsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {isToolsOpen && (
+              <div className="flex flex-col gap-2 mt-2 pl-11 pr-4">
+                <Link 
+                  href="/dashboard/tools/duplicate-remover" 
+                  className={`text-sm font-semibold transition-colors py-1 ${
+                    pathname === "/dashboard/tools/duplicate-remover" ? "text-purple-400" : "text-gray-500 hover:text-white"
+                  }`}
+                >
+                  Duplicate Remover
+                </Link>
+                <Link 
+                  href="/dashboard/tools/missing-files" 
+                  className={`text-sm font-semibold transition-colors py-1 ${
+                    pathname === "/dashboard/tools/missing-files" ? "text-purple-400" : "text-gray-500 hover:text-white"
+                  }`}
+                >
+                  Missing File Finder
+                </Link>
+                <Link 
+                  href="/dashboard/tools/spotify" 
+                  className={`text-sm font-semibold transition-colors py-1 ${
+                    pathname === "/dashboard/tools/spotify" ? "text-purple-400" : "text-gray-500 hover:text-white"
+                  }`}
+                >
+                  Spotify Downloader
+                </Link>
+
+                {/* Upsell to Premium Tools */}
+                <div className="pt-3 mt-1 border-t border-white/10">
+                  <Link 
+                    href="/dashboard/tools/upgrade" 
+                    className="flex items-center gap-2 text-[11px] font-black text-pink-400 hover:text-pink-300 transition-colors uppercase tracking-widest"
+                  >
+                    <Star size={12} className="fill-current" />
+                    Premium Tools Upgrade
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <SidebarLink 
+            href="/dashboard/inventory" 
+            icon={<Package size={20} />} 
+            label="Inventory" 
+            active={pathname === "/dashboard/inventory"} 
+          />
         </nav>
 
         {/* Bottom Actions */}
-        <div className="p-4 border-t border-white/10 space-y-2">
-          <SidebarLink href="/dashboard/settings" icon={<Settings size={20} />} label="Settings" />
+        <div className="p-4 border-t border-white/10 space-y-2 shrink-0">
+          <SidebarLink 
+            href="/dashboard/settings" 
+            icon={<Settings size={20} />} 
+            label="Settings" 
+            active={pathname === "/dashboard/settings"}
+          />
           <button className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-400 hover:bg-red-500/10 rounded-xl transition-colors">
             <LogOut size={20} />
             Logout
@@ -60,7 +181,7 @@ export default function DashboardLayout({
           </div>
         </header>
 
-        {/* Dynamic Page Content (This is where page.tsx gets injected) */}
+        {/* Dynamic Page Content */}
         <div className="flex-1 overflow-y-auto p-8">
           {children}
         </div>
