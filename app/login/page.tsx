@@ -1,11 +1,20 @@
 "use client"; // Must be the first line to enable browser-side logic 🚀
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client"; // Importing the connection we built
-import { Music } from "lucide-react";
+import { Music, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
+  const router = useRouter();
   const supabase = createClient();
+
+  // 1. Set up state to track user input and loading/error status
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -17,7 +26,37 @@ export default function LoginPage() {
     });
 
     if (error) {
-      console.error("Authentication error:", error.message);
+      setErrorMsg(error.message);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg("");
+
+    // 2. Attempt to sign in with Supabase
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      setErrorMsg(error.message);
+      setIsLoading(false);
+    } else if (data.user) {
+      // 3. Smart Routing: Check their tier before sending them anywhere!
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('subscription_tier')
+        .eq('id', data.user.id)
+        .single();
+
+      if (!profile || profile.subscription_tier === 'none') {
+        router.push("/pricing");
+      } else {
+        router.push("/dashboard");
+      }
     }
   };
 
@@ -25,7 +64,6 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-blue-900 flex flex-col items-center justify-center px-6">
       
       <Link href="/" className="mb-8 flex items-center gap-3">
-        <Music className="text-purple-400 size-8" />
         <span className="text-4xl font-light tracking-[0.2em] uppercase text-white">NEXORA</span>
       </Link>
 
@@ -35,9 +73,10 @@ export default function LoginPage() {
           <p className="text-gray-300">Sign in to your account to continue</p>
         </div>
 
-        {/* New Google Sign-In Button */}
+        {/* Google Sign-In Button */}
         <button 
           onClick={handleGoogleLogin}
+          type="button"
           className="w-full flex items-center justify-center gap-3 bg-white text-black font-bold py-4 rounded-full mb-6 hover:bg-gray-200 transition-all transform hover:scale-[1.02]"
         >
           <img src="https://www.google.com/favicon.ico" alt="Google" className="size-5" />
@@ -51,13 +90,24 @@ export default function LoginPage() {
           <div className="h-px bg-white/10 flex-1"></div>
         </div>
 
-        <form className="space-y-6">
+        {/* Error Message Display */}
+        {errorMsg && (
+          <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-2xl flex items-center gap-3 text-red-200 text-sm">
+            <AlertCircle className="size-5 shrink-0 text-red-400" />
+            <p>{errorMsg}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
             <input 
               type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="dj@example.com"
               className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-purple-500 transition-all backdrop-blur-sm"
+              required
             />
           </div>
           
@@ -65,8 +115,11 @@ export default function LoginPage() {
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Password</label>
             <input 
               type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-purple-500 transition-all backdrop-blur-sm"
+              required
             />
           </div>
 
@@ -85,8 +138,14 @@ export default function LoginPage() {
             </Link>
           </div>
 
-          <button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-white font-black uppercase tracking-widest py-5 rounded-full transition-all transform hover:scale-[1.02] shadow-xl">
-            Sign In
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className={`w-full font-black uppercase tracking-widest py-5 rounded-full transition-all transform shadow-xl mt-2 ${
+              isLoading ? "bg-purple-600/50 cursor-not-allowed text-white/50" : "bg-purple-600 hover:bg-purple-700 text-white hover:scale-[1.02]"
+            }`}
+          >
+            {isLoading ? "Signing in..." : "Sign In"}
           </button>
         </form>
 

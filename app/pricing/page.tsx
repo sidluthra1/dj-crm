@@ -1,9 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { Check, Zap, Star, Shield, Users, Plus } from "lucide-react";
 
 export default function PricingPage() {
+
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+  }, []);
+  
   // Manual scroll function to fix the anchor link issue
   const scrollToContact = (e: React.MouseEvent) => {
     e.preventDefault();

@@ -1,30 +1,67 @@
+"use client";
+
+import { useEffect } from "react";
 import { ArrowRight, Zap, Music, Shield, Cpu } from "lucide-react";
 import Link from "next/link";
 
-const Navbar = () => (
-  <nav className="fixed top-0 w-full z-50 px-10 py-6 flex justify-between items-center backdrop-blur-md bg-black/10 border-b border-white/5">
-    <div className="flex-1">
-      <span className="text-2xl font-light tracking-[0.2em] uppercase text-white">NEXORA</span>
-    </div>
-    <div className="hidden md:flex flex-1 justify-center items-center gap-10">
-      <a href="#about" className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors">About</a>
-      <a href="#contact" className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors">Contact Us</a>
-    </div>
-    <div className="flex-1 flex justify-end">
-      <Link href="/login" className="text-sm font-bold text-white hover:text-purple-400 transition-colors border border-white/20 px-6 py-2 rounded-full hover:bg-white/10">
-        Login
-      </Link>
-    </div>
-  </nav>
-);
+const Navbar = () => {
+  const scrollToSection = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  return (
+    <nav className="fixed top-0 w-full z-50 px-10 py-6 flex justify-between items-center backdrop-blur-md bg-black/10 border-b border-white/5">
+      <div className="flex-1">
+        <Link href="/" className="text-2xl font-light tracking-[0.2em] uppercase text-white">
+          NEXORA
+        </Link>
+      </div>
+      <div className="hidden md:flex flex-1 justify-center items-center gap-10">
+        <a 
+          href="#about" 
+          onClick={(e) => scrollToSection(e, "about")}
+          className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors"
+        >
+          About
+        </a>
+        <a 
+          href="#contact" 
+          onClick={(e) => scrollToSection(e, "contact")}
+          className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors"
+        >
+          Contact Us
+        </a>
+      </div>
+      <div className="flex-1 flex justify-end">
+        <Link href="/login" className="text-sm font-bold text-white hover:text-purple-400 transition-colors border border-white/20 px-6 py-2 rounded-full hover:bg-white/10">
+          Login
+        </Link>
+      </div>
+    </nav>
+  );
+};
 
 export default function Home() {
+  useEffect(() => {
+    // Tell the browser NOT to remember the scroll position
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    // Force the window to the very top
+    window.scrollTo(0, 0);
+  }, []);
+  
   return (
     <>
       <Navbar />
       
-      <main className="bg-gradient-to-br from-purple-900 via-black to-blue-900 text-white min-h-screen scroll-smooth">
+      <main className="bg-gradient-to-br from-purple-900 via-black to-blue-900 text-white min-h-screen">
         
+        {/* HERO SECTION */}
         <section className="h-[85vh] flex flex-col items-center justify-center px-6">
           <div className="flex flex-col items-center mb-12 text-center">
             <h2 className="text-4xl font-light tracking-[0.2em] uppercase text-purple-400 mb-2">
@@ -60,6 +97,7 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ABOUT SECTION */}
         <section id="about" className="py-24 px-6 max-w-7xl mx-auto">
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div>
@@ -116,16 +154,16 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="flex flex-col gap-3">
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Name</label>
-                <input type="text" placeholder="Your Name" className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all" />
+                <input type="text" placeholder="Your Name" className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all text-white" />
               </div>
               <div className="flex flex-col gap-3">
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
-                <input type="email" placeholder="dj@example.com" className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all" />
+                <input type="email" placeholder="dj@example.com" className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all text-white" />
               </div>
             </div>
             <div className="flex flex-col gap-3">
               <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Message</label>
-              <textarea rows={4} placeholder="How can we help your business?" className="bg-white/5 border border-white/10 rounded-3xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all resize-none" />
+              <textarea rows={4} placeholder="How can we help your business?" className="bg-white/5 border border-white/10 rounded-3xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all resize-none text-white" />
             </div>
             <div className="flex justify-center pt-4">
               <button type="submit" className="px-16 py-5 bg-white text-black font-black uppercase tracking-widest rounded-full hover:bg-purple-500 hover:text-white transition-all scale-105 shadow-2xl">
@@ -135,7 +173,6 @@ export default function Home() {
           </form>
         </section>
 
-        {/* Footer */}
         <footer className="border-t border-white/5 py-12 text-center text-gray-500 text-sm">
           &copy; 2026 NEXORA. All rights reserved.
         </footer>
