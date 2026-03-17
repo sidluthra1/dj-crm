@@ -192,7 +192,7 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
                     </span>
                   </div>
 
-                  {/* End Time - THE NEW ADDITION */}
+                  {/* End Time */}
                   <div className="flex items-center justify-between text-gray-400 pt-1 border-t border-white/5">
                     <span className="flex items-center gap-2"><Clock size={14} className="text-blue-400"/> Return / End</span>
                     <span className="text-white">

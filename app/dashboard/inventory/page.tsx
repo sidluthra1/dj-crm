@@ -23,7 +23,6 @@ interface InventoryItem {
   available_quantity: number;
   repair_quantity: number;
   rental_price: number;
-  // This now comes from the joined event data
   event_equipment: {
     events: {
       event_date: string;
@@ -43,7 +42,6 @@ export default function InventoryPage() {
 
   useEffect(() => {
     async function fetchInventory() {
-      // THE UPDATED QUERY: We pull all associated events for each item
       const { data, error } = await supabase
         .from('inventory')
         .select(`
