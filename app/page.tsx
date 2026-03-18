@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { ArrowRight, Zap, Music, Shield, Cpu } from "lucide-react";
+import { motion } from "framer-motion";
+import { ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
+import { ElegantShape } from "@/components/ui/shape-landing-hero";
+import AboutSection from "@/components/ui/about-section";
 
 const Navbar = () => {
   const scrollToSection = (e: React.MouseEvent, id: string) => {
@@ -59,122 +62,180 @@ export default function Home() {
     <>
       <Navbar />
       
-      <main className="bg-gradient-to-br from-purple-900 via-black to-blue-900 text-white min-h-screen">
-        
+      <main className="bg-[#13131f] text-white min-h-screen">
+
         {/* HERO SECTION */}
-        <section className="h-[85vh] flex flex-col items-center justify-center px-6">
-          <div className="flex flex-col items-center mb-12 text-center">
-            <h2 className="text-4xl font-light tracking-[0.2em] uppercase text-purple-400 mb-2">
-              Nexora
-            </h2>
-            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight leading-tight">
-              Your Entire DJ Business <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-purple-600">
-                Synced. Performance-Ready.
-              </span>
-            </h1>
-          </div>
+        <section className="relative h-screen flex items-center overflow-hidden">
 
-          <div className="flex gap-6 justify-center items-center">
-            <Link href="/signup">
-              <button className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full text-white font-semibold text-lg overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-[0_0_40px_rgba(168,85,247,0.6)]">
-                <span className="relative z-10 flex items-center gap-2">
-                  Get Started
-                  <Zap className="size-5 group-hover:scale-110 transition-transform fill-current" />
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-pink-700 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </button>
-            </Link>
+          {/* ── Elegant floating shapes (framer-motion) ── */}
+          <ElegantShape delay={0.3} width={500} height={110} rotate={12}  gradient="from-purple-500/[0.12]" className="left-[-8%] top-[18%]" />
+          <ElegantShape delay={0.5} width={320} height={80}  rotate={-10} gradient="from-fuchsia-500/[0.10]" className="left-[5%] bottom-[12%]" />
+          <ElegantShape delay={0.6} width={180} height={50}  rotate={20}  gradient="from-violet-500/[0.12]" className="left-[30%] top-[8%]" />
 
-            <Link href="/login">
-              <button className="group relative px-8 py-4 bg-white/10 backdrop-blur-lg border-2 border-white/30 rounded-full text-white font-semibold text-lg overflow-hidden transition-all duration-300 hover:scale-105 hover:bg-white/20 hover:border-white/50">
-                <span className="relative z-10 flex items-center gap-2">
+          {/* ── Decorative corner brackets ── */}
+          <div className="pointer-events-none absolute top-[4.5rem] right-5 w-24 h-24 border-t-[1.5px] border-r-[1.5px] border-white/20" />
+          <div className="pointer-events-none absolute top-[5.5rem] right-9 w-14 h-14 border-t border-r border-white/10" />
+          <div className="pointer-events-none absolute bottom-10 left-6 w-20 h-20 border-b-[1.5px] border-l-[1.5px] border-white/20" />
+
+          {/* ── Neon accent lines ── */}
+          <div className="pointer-events-none absolute bottom-28 right-0 w-52 h-[1.5px] bg-gradient-to-l from-fuchsia-500/75 to-transparent" />
+          <div className="pointer-events-none absolute bottom-20 right-0 w-32 h-[1px] bg-gradient-to-l from-purple-400/50 to-transparent" />
+          <div className="pointer-events-none absolute top-1/2 right-0 -translate-y-1/2 w-[1.5px] h-40 bg-gradient-to-b from-transparent via-purple-500/50 to-transparent" />
+
+          {/* ── Left: text + buttons ── */}
+          <div className="relative z-10 w-1/2 pl-14 pr-4">
+            <motion.h1
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.4, ease: [0.25, 0.4, 0.25, 1] }}
+              className="text-[4.5rem] md:text-[5.5rem] font-black leading-[1.05] tracking-tight mb-5 text-white"
+            >
+              Your Entire<br />DJ Business
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.6, ease: [0.25, 0.4, 0.25, 1] }}
+              className="text-xl font-semibold text-white/70 mb-10 tracking-wide"
+            >
+              Synced. Performance-Ready.
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.8, ease: [0.25, 0.4, 0.25, 1] }}
+              className="flex items-center gap-4"
+            >
+              <Link href="/signup">
+                <button className="group relative flex items-center gap-2 px-7 py-3.5 bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl text-white font-semibold text-base overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-[0_0_32px_rgba(168,85,247,0.55)]">
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-fuchsia-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Zap className="relative z-10 size-4 fill-current" />
+                  <span className="relative z-10">Get Started</span>
+                </button>
+              </Link>
+              <Link href="/login">
+                <button className="group flex items-center gap-2 px-7 py-3.5 bg-white/5 border border-white/25 rounded-xl text-white font-semibold text-base transition-all duration-300 hover:bg-white/10 hover:border-white/40 hover:scale-105">
+                  <ArrowRight className="size-4 opacity-60 group-hover:translate-x-0.5 transition-transform" />
                   Login
-                  <ArrowRight className="size-5 group-hover:translate-x-1 transition-transform" />
-                </span>
-              </button>
-            </Link>
+                </button>
+              </Link>
+            </motion.div>
           </div>
+
+          {/* ── Right: headphones image ── */}
+          <div className="pointer-events-none select-none absolute right-0 top-0 h-full w-1/2 flex items-center justify-center">
+            {/* Large outer glow — fills the right half like the mockup spotlight */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-[700px] h-[700px] rounded-full bg-purple-900/60 blur-[120px]" />
+            </div>
+            {/* Tighter inner glow — hot purple core behind the headphones */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-[380px] h-[380px] rounded-full bg-purple-700/45 blur-[70px]" />
+            </div>
+            {/* Floor reflection glow */}
+            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-96 h-10 rounded-full bg-purple-600/40 blur-2xl" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/headphones.png"
+              alt="DJ Headphones"
+              className="relative z-10 w-[580px] max-w-none drop-shadow-[0_8px_60px_rgba(139,92,246,0.6)]"
+            />
+          </div>
+
+          {/* Gradient fade — blends hero glow into the about section below */}
+          <div className="pointer-events-none absolute bottom-0 left-0 w-full h-48 bg-gradient-to-t from-[#13131f] via-[#13131f]/80 to-transparent z-20" />
+
         </section>
 
-        {/* ABOUT SECTION */}
-        <section id="about" className="py-24 px-6 max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-16 items-center">
-            <div>
-              <h2 className="text-5xl font-bold mb-8 leading-tight">
-                One Platform. <br />
-                <span className="text-purple-400">Infinite Control.</span>
-              </h2>
-              <p className="text-gray-300 text-lg leading-relaxed mb-8">
-                Nexora was born from the chaos of managing a growing DJ career. We realized that juggling Serato crates, Excel spreadsheets for equipment, and email threads for contracts was slowing us down. 🎧
-              </p>
-              <div className="space-y-6">
-                <div className="flex gap-4">
-                  <div className="p-3 bg-purple-600/20 rounded-xl border border-purple-500/30">
-                    <Music className="text-purple-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white">Performance-First Tools</h4>
-                    <p className="text-gray-400 text-sm">Automate your file management and crate curation with AI-driven insights.</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="p-3 bg-blue-600/20 rounded-xl border border-blue-500/30">
-                    <Shield className="text-blue-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white">Enterprise-Grade CRM</h4>
-                    <p className="text-gray-400 text-sm">Professional contracts, invoices, and client portals that reflect your brand.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-10 relative overflow-hidden">
-              <div className="absolute -top-24 -right-24 size-64 bg-purple-600/20 blur-[100px]" />
-              <Cpu className="size-12 text-purple-400 mb-6" />
-              <h3 className="text-2xl font-bold text-white mb-4">The Mission</h3>
-              <p className="text-gray-300 leading-relaxed">
-                Our goal is to give every DJ—from solo acts to full-scale production companies—the same tools used by industry giants. We handle the logistical heavy lifting so you can stay focused on the mix.
-              </p>
-            </div>
-          </div>
-        </section>
+        <AboutSection />
 
         {/* CONTACT SECTION */}
-        <section id="contact" className="min-h-screen flex flex-col items-center justify-center px-6 ">
-          <div className="text-center mb-16">
-            <h2 className="text-5xl font-bold mb-6">Contact Us</h2>
-            <p className="text-gray-400 max-w-lg text-lg">
-              Ready to transform your DJ business? Send us a message and our team will get back to you shortly.
-            </p>
-          </div>
+        <section id="contact" className="relative py-28 px-6 bg-[#13131f] overflow-hidden">
 
-          <form className="w-full max-w-4xl space-y-8 bg-white/5 p-8 md:p-12 rounded-[2.5rem] border border-white/10 backdrop-blur-xl">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="flex flex-col gap-3">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Name</label>
-                <input type="text" placeholder="Your Name" className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all text-white" />
+          {/* Ambient glow blobs */}
+          <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 w-[700px] h-[300px] bg-purple-900/25 blur-[100px] rounded-full" />
+          <div className="pointer-events-none absolute top-1/2 left-1/4 w-[300px] h-[300px] bg-fuchsia-900/15 blur-[80px] rounded-full" />
+
+          {/* Decorative corner brackets */}
+          <div className="pointer-events-none absolute bottom-10 right-6 w-20 h-20 border-b-[1.5px] border-r-[1.5px] border-white/15" />
+          <div className="pointer-events-none absolute top-10 left-6 w-20 h-20 border-t-[1.5px] border-l-[1.5px] border-white/15" />
+
+          <div className="relative z-10 max-w-2xl mx-auto">
+
+            {/* Header */}
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8, ease: [0.25, 0.4, 0.25, 1] }}
+              className="text-center mb-12"
+            >
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 mb-5">
+                <span className="text-xs text-purple-300 tracking-wide">Get in Touch</span>
               </div>
-              <div className="flex flex-col gap-3">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
-                <input type="email" placeholder="dj@example.com" className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all text-white" />
+              <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
+                Contact{" "}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">
+                  Us
+                </span>
+              </h2>
+              <p className="text-white/45 text-lg leading-relaxed">
+                Ready to transform your DJ business? Send us a message and our team will get back to you shortly.
+              </p>
+            </motion.div>
+
+            {/* Form card */}
+            <motion.form
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.9, delay: 0.15, ease: [0.25, 0.4, 0.25, 1] }}
+              className="relative rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-sm p-8 md:p-10 space-y-6"
+            >
+              {/* Subtle inner glow top-right */}
+              <div className="pointer-events-none absolute -top-10 -right-10 w-48 h-48 bg-purple-700/15 blur-[60px] rounded-full" />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-bold text-white/35 uppercase tracking-widest">Name</label>
+                  <input
+                    type="text"
+                    placeholder="Your Name"
+                    className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-purple-500/60 focus:bg-white/[0.06] transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-bold text-white/35 uppercase tracking-widest">Email</label>
+                  <input
+                    type="email"
+                    placeholder="dj@example.com"
+                    className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-purple-500/60 focus:bg-white/[0.06] transition-all"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Message</label>
-              <textarea rows={4} placeholder="How can we help your business?" className="bg-white/5 border border-white/10 rounded-3xl px-6 py-4 focus:outline-none focus:border-purple-500 transition-all resize-none text-white" />
-            </div>
-            <div className="flex justify-center pt-4">
-              <button type="submit" className="px-16 py-5 bg-white text-black font-black uppercase tracking-widest rounded-full hover:bg-purple-500 hover:text-white transition-all scale-105 shadow-2xl">
-                Send Message
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[11px] font-bold text-white/35 uppercase tracking-widest">Message</label>
+                <textarea
+                  rows={4}
+                  placeholder="How can we help your business?"
+                  className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-purple-500/60 focus:bg-white/[0.06] transition-all resize-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="group relative w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl text-white font-semibold text-sm overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_32px_rgba(168,85,247,0.45)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-fuchsia-700 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="relative z-10">Send Message</span>
               </button>
-            </div>
-          </form>
+            </motion.form>
+          </div>
         </section>
 
-        <footer className="border-t border-white/5 py-12 text-center text-gray-500 text-sm">
-          &copy; 2026 NEXORA. All rights reserved.
+        <footer className="border-t border-white/[0.06] py-10 text-center bg-[#13131f]">
+          <span className="text-white/25 text-sm tracking-wide">&copy; 2026 NEXORA. All rights reserved.</span>
         </footer>
 
       </main>
