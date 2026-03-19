@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { 
   ArrowLeft, Calendar, Clock, MapPin, User, DollarSign, 
-  Info, Navigation, CreditCard, ShieldCheck, FileText, Save, Loader2
+  Info, Navigation, CreditCard, ShieldCheck, FileText, Save, Loader2,
+  Globe, UserPlus, Package
 } from "lucide-react";
 
 export default function NewEventPage() {
@@ -14,7 +15,6 @@ export default function NewEventPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Fetch the current user so we can attach them to the event
   useEffect(() => {
     async function getUser() {
       const { data: { user } } = await supabase.auth.getUser();
@@ -27,9 +27,9 @@ export default function NewEventPage() {
     title: "",
     event_type: "Private Event",
     status: "Confirmed",
-    event_date: "", // Will hold combined date + start time
-    setup_time: "", // Will hold combined date + setup time
-    event_end_time: "", // Will hold combined date + end time
+    event_date: "", 
+    setup_time: "", 
+    event_end_time: "", 
     pay: "",
     deposit_amount: "",
     client_name: "",
@@ -41,10 +41,9 @@ export default function NewEventPage() {
     travel_time: "",
     venue_contact_email: "",
     venue_contact_phone: "",
-    venue_website: "",
+    venue_website: "", // Now included in the UI
     guest_count: "",
     attire: "Standard",
-    client_notes: "",
     internal_notes: ""
   });
 
@@ -52,15 +51,20 @@ export default function NewEventPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Live Math Calculation for the UI
+  const currentTotal = parseFloat(formData.pay) || 0;
+  const currentDeposit = parseFloat(formData.deposit_amount) || 0;
+  const currentBalance = currentTotal - currentDeposit;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userId) return alert("You must be logged in to create an event.");
     setIsSubmitting(true);
 
-    // Calculate balance due automatically
-    const payNum = parseFloat(formData.pay) || 0;
-    const depNum = parseFloat(formData.deposit_amount) || 0;
-    const balance = payNum - depNum;
+    const formatForDB = (dateString: string) => {
+      if (!dateString) return null;
+      return new Date(dateString).toISOString();
+    };
 
     const { data, error } = await supabase
       .from('events')
@@ -69,12 +73,12 @@ export default function NewEventPage() {
         title: formData.title,
         event_type: formData.event_type,
         status: formData.status,
-        event_date: formData.event_date || null,
-        setup_time: formData.setup_time || null,
-        event_end_time: formData.event_end_time || null,
-        pay: payNum,
-        deposit_amount: depNum,
-        balance_due: balance,
+        event_date: formatForDB(formData.event_date),
+        setup_time: formatForDB(formData.setup_time),
+        event_end_time: formatForDB(formData.event_end_time),
+        pay: currentTotal,
+        deposit_amount: currentDeposit,
+        balance_due: currentBalance,
         client_name: formData.client_name,
         client_email: formData.client_email,
         client_phone: formData.client_phone,
@@ -87,7 +91,6 @@ export default function NewEventPage() {
         venue_website: formData.venue_website,
         guest_count: parseInt(formData.guest_count) || null,
         attire: formData.attire,
-        client_notes: formData.client_notes,
         internal_notes: formData.internal_notes
       }])
       .select()
@@ -96,10 +99,9 @@ export default function NewEventPage() {
     setIsSubmitting(false);
 
     if (error) {
-      console.error("Error creating event:", error);
-      alert("Failed to create event. Check console.");
+      console.error("Supabase Error Details:", error);
+      alert(`Error: ${error.message}`);
     } else {
-      // Route directly to the new event's detail page!
       router.push(`/dashboard/events/${data.id}`);
     }
   };
@@ -150,10 +152,12 @@ export default function NewEventPage() {
           </div>
         </div>
 
-        {/* Timeline */}
-        <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Clock className="text-orange-400"/> Timeline</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Timeline & Financials Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Timeline */}
+          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8 space-y-6">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2"><Clock className="text-orange-400"/> Timeline</h2>
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Setup / Load-in</label>
               <input type="datetime-local" name="setup_time" value={formData.setup_time} onChange={handleChange} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-gray-300 focus:outline-none focus:border-purple-500 transition-colors [color-scheme:dark]" />
@@ -167,12 +171,10 @@ export default function NewEventPage() {
               <input type="datetime-local" name="event_end_time" value={formData.event_end_time} onChange={handleChange} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-gray-300 focus:outline-none focus:border-purple-500 transition-colors [color-scheme:dark]" />
             </div>
           </div>
-        </div>
 
-        {/* Financials */}
-        <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><CreditCard className="text-green-400"/> Financials</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Financials */}
+          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8 space-y-6 flex flex-col">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2"><CreditCard className="text-green-400"/> Financials</h2>
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Total Invoice Amount ($)</label>
               <input type="number" step="0.01" name="pay" value={formData.pay} onChange={handleChange} placeholder="0.00" className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors" />
@@ -181,7 +183,12 @@ export default function NewEventPage() {
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Deposit Paid ($)</label>
               <input type="number" step="0.01" name="deposit_amount" value={formData.deposit_amount} onChange={handleChange} placeholder="0.00" className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors" />
             </div>
+            <div className="mt-auto bg-black/40 border border-white/5 p-5 rounded-xl flex justify-between items-center">
+               <span className="text-sm font-bold text-gray-400">Calculated Balance Due:</span>
+               <span className="text-2xl font-black text-yellow-400">${currentBalance.toFixed(2)}</span>
+            </div>
           </div>
+
         </div>
 
         {/* Client & Venue Grid */}
@@ -215,6 +222,10 @@ export default function NewEventPage() {
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Full Address</label>
               <input type="text" name="venue_address" value={formData.venue_address} onChange={handleChange} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500" />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Globe size={14}/> Venue Website</label>
+              <input type="url" name="venue_website" value={formData.venue_website} onChange={handleChange} placeholder="https://" className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500" />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Travel Time</label>
@@ -228,9 +239,34 @@ export default function NewEventPage() {
           </div>
         </div>
 
+        {/* Staff & Equipment Placeholders (UI Only) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
+            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2"><UserPlus className="text-blue-400"/> Staff Assignment</h2>
+            <p className="text-sm text-gray-400 mb-6">You will be able to assign staff members after creating the event.</p>
+            <div className="flex gap-3 opacity-50 pointer-events-none">
+              <select className="flex-1 bg-black/40 border border-white/10 rounded-xl p-4 text-gray-500 appearance-none">
+                <option>Select staff member...</option>
+              </select>
+              <button className="px-6 py-4 bg-white/5 rounded-xl border border-white/10 text-white font-bold">+</button>
+            </div>
+          </div>
+          
+          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
+            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2"><Package className="text-purple-400"/> Equipment Routing</h2>
+            <p className="text-sm text-gray-400 mb-6">You will be able to build your gear pack list after creating the event.</p>
+            <div className="flex gap-3 opacity-50 pointer-events-none">
+              <select className="flex-1 bg-black/40 border border-white/10 rounded-xl p-4 text-gray-500 appearance-none">
+                <option>Select gear from inventory...</option>
+              </select>
+              <button className="px-6 py-4 bg-white/5 rounded-xl border border-white/10 text-white font-bold">+</button>
+            </div>
+          </div>
+        </div>
+
         {/* Notes */}
         <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><FileText className="text-pink-400"/> Notes & Execution</h2>
+          <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><FileText className="text-pink-400"/> Logistics & Internal Notes</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Est. Guest Count</label>
@@ -241,20 +277,14 @@ export default function NewEventPage() {
               <input type="text" name="attire" value={formData.attire} onChange={handleChange} placeholder="e.g. Formal, Casual, All-Black" className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors" />
             </div>
           </div>
-          <div className="space-y-6">
-            <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Client / Guest Requests</label>
-              <textarea name="client_notes" value={formData.client_notes} onChange={handleChange} rows={3} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors resize-none" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Internal Logistics Notes</label>
-              <textarea name="internal_notes" value={formData.internal_notes} onChange={handleChange} rows={3} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors resize-none" />
-            </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Internal Logistics Notes</label>
+            <textarea name="internal_notes" value={formData.internal_notes} onChange={handleChange} rows={4} placeholder="Private notes for the team..." className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors resize-none" />
           </div>
         </div>
 
         {/* Sticky Submit Footer */}
-        <div className="sticky bottom-8 mt-10 bg-gray-900/90 backdrop-blur-md border border-white/10 rounded-[2rem] p-6 flex justify-between items-center shadow-[0_20px_40px_rgba(0,0,0,0.8)]">
+        <div className="sticky bottom-8 mt-10 bg-gray-900/90 backdrop-blur-md border border-white/10 rounded-[2rem] p-6 flex justify-between items-center shadow-[0_20px_40px_rgba(0,0,0,0.8)] z-50">
           <p className="text-gray-400 text-sm hidden md:block">Double check your timeline dates before saving.</p>
           <div className="flex gap-4 w-full md:w-auto">
             <button type="button" onClick={() => router.back()} className="px-6 py-4 rounded-full font-bold text-white bg-white/5 hover:bg-white/10 transition-colors flex-1 md:flex-none">
