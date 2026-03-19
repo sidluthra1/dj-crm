@@ -61,7 +61,10 @@ export default function UpcomingEventsPage() {
           <h2 className="text-4xl font-black text-white mb-2 tracking-tight">Event Schedule</h2>
           <p className="text-gray-400">Real-time tracking of your active and future bookings.</p>
         </div>
-        <button className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-8 rounded-full transition-all shadow-[0_0_30px_rgba(168,85,247,0.2)]">
+        <button 
+          onClick={() => router.push('/dashboard/events/new')}
+          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-8 rounded-full transition-all shadow-[0_0_30px_rgba(168,85,247,0.2)]"
+        >
           <Plus size={20} /> Add New Event
         </button>
       </div>
