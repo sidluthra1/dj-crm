@@ -133,7 +133,10 @@ export default function InventoryPage() {
               className="pl-11 pr-6 py-3 bg-white/5 border border-white/10 rounded-full text-sm focus:outline-none focus:border-purple-500 transition-colors w-64 text-white"
             />
           </div>
-          <button className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-full transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)]">
+          <button 
+            onClick={() => router.push('/dashboard/inventory/new')}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-full transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+          >
             <Plus size={20} />
             Add Item
           </button>

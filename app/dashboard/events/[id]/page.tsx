@@ -6,7 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import { 
   ArrowLeft, MapPin, User, Clock, Package, DollarSign, Edit, Trash2, 
   Mail, Phone, Globe, Navigation, Users, FileText, Download, Music, 
-  ShieldCheck, MessageSquare, Info, UserPlus, FileSignature, CreditCard
+  ShieldCheck, MessageSquare, Info, UserPlus, FileSignature, CreditCard, X, Plus, Minus, Loader2
 } from "lucide-react";
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,34 +16,108 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [event, setEvent] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchEventDetails() {
-      const { data, error } = await supabase
-        .from('events')
-        .select(`
-          *,
-          event_equipment (
-            quantity_allocated,
-            inventory (
-              name,
-              category,
-              rental_price
-            )
-          )
-        `)
-        .eq('id', id)
-        .single();
+  // GEAR MODAL STATE
+  const [isGearModalOpen, setIsGearModalOpen] = useState(false);
+  const [fullInventory, setFullInventory] = useState<any[]>([]);
+  const [allocations, setAllocations] = useState<Record<string, number>>({});
+  const [isSavingGear, setIsSavingGear] = useState(false);
 
-      if (data) setEvent(data);
-      setIsLoading(false);
-    }
+  // Abstracted fetch so we can call it again after saving gear
+  const fetchEventDetails = async () => {
+    const { data, error } = await supabase
+      .from('events')
+      .select(`
+        *,
+        event_equipment (
+          inventory_id,
+          quantity_allocated,
+          inventory (
+            id,
+            name,
+            category,
+            rental_price,
+            quantity
+          )
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (data) setEvent(data);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
     fetchEventDetails();
   }, [id, supabase]);
 
+  // --- GEAR ASSIGNMENT LOGIC ---
+  const openGearModal = async () => {
+    setIsGearModalOpen(true);
+    
+    // 1. Fetch the entire inventory catalogue
+    const { data } = await supabase.from('inventory').select('*').order('category');
+    if (data) setFullInventory(data);
+
+    // 2. Pre-fill the modal with the gear already assigned to this event
+    const currentAllocs: Record<string, number> = {};
+    event.event_equipment?.forEach((eq: any) => {
+      currentAllocs[eq.inventory_id] = eq.quantity_allocated;
+    });
+    setAllocations(currentAllocs);
+  };
+
+  const updateAllocation = (inventoryId: string, delta: number, maxQty: number) => {
+    setAllocations(prev => {
+      const currentQty = prev[inventoryId] || 0;
+      let newQty = currentQty + delta;
+      
+      // Keep boundaries between 0 and the max amount owned
+      if (newQty < 0) newQty = 0;
+      if (newQty > maxQty) newQty = maxQty;
+      
+      return { ...prev, [inventoryId]: newQty };
+    });
+  };
+
+  const saveGearPackList = async () => {
+    setIsSavingGear(true);
+
+    // 1. Wipe the current pack list for this event
+    await supabase.from('event_equipment').delete().eq('event_id', id);
+
+    // 2. Build the new list of inserts based on what > 0 in the modal
+    const inserts = Object.entries(allocations)
+      .filter(([invId, qty]) => qty > 0)
+      .map(([invId, qty]) => ({
+        event_id: id,
+        inventory_id: invId,
+        quantity_allocated: qty
+      }));
+
+    // 3. Save to database
+    if (inserts.length > 0) {
+      const { error } = await supabase.from('event_equipment').insert(inserts);
+      if (error) console.error("Error saving gear:", error);
+    }
+
+    // 4. Close modal and refresh the background page data
+    setIsGearModalOpen(false);
+    setIsSavingGear(false);
+    fetchEventDetails();
+  };
+
   if (isLoading || !event) return <div className="p-20 text-center text-gray-400 font-bold animate-pulse uppercase tracking-widest">Loading Event Profile...</div>;
 
+  // Group the full inventory by category for the modal
+  const groupedInventory = fullInventory.reduce((acc, item: any) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {} as Record<string, any[]>);
+
   return (
-    <div className="max-w-7xl mx-auto pb-12">
+    <div className="max-w-7xl mx-auto pb-12 relative">
       <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-400 hover:text-white mb-8 text-sm font-bold uppercase tracking-widest transition-colors">
         <ArrowLeft size={16} /> Back to Events
       </button>
@@ -70,7 +144,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         {/* COLUMN 1: Logistics, Financials & Venue (Span 4) */}
         <div className="lg:col-span-4 space-y-6">
           
-          {/* Timeline Block */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
             <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Clock size={16}/> Timeline</h3>
             <div className="space-y-4">
@@ -89,7 +162,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* FINANCIALS BLOCK - THE NEW ADDITION */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
             <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><CreditCard size={16}/> Financials</h3>
             <div className="space-y-4">
@@ -103,7 +175,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               <div className="flex justify-between items-center bg-black/30 p-4 rounded-xl border border-white/5">
                 <span className="text-gray-400 text-sm font-bold">Balance Due</span>
-                {/* If balance_due exists, show it. Otherwise calculate it (pay - deposit). */}
                 <span className="text-yellow-400 font-black text-xl">
                   ${event.balance_due !== null ? event.balance_due : (event.pay - (event.deposit_amount || 0)).toFixed(2)}
                 </span>
@@ -111,7 +182,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Venue Block */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
             <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><MapPin size={16}/> Venue & Travel</h3>
             <div className="space-y-5">
@@ -137,7 +207,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Client Block */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
             <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><User size={16}/> Client Info</h3>
             <div className="space-y-3">
@@ -152,7 +221,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         {/* COLUMN 2: Details, Staff & Notes (Span 4) */}
         <div className="lg:col-span-4 space-y-6 flex flex-col">
           
-          {/* Quick Details */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 text-center">
               <Users className="size-6 text-purple-400 mx-auto mb-2" />
@@ -166,7 +234,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* DEDICATED STAFF BLOCK */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><UserPlus size={16}/> Crew / Staff</h3>
@@ -193,7 +260,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Notes Blocks */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 flex-1">
             <div className="space-y-6">
               <div>
@@ -217,7 +283,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         {/* COLUMN 3: Documents & Gear (Span 4) */}
         <div className="lg:col-span-4 space-y-6">
           
-          {/* Documents & Forms */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
             <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6">Event Files</h3>
             <div className="space-y-3">
@@ -229,11 +294,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Pack List */}
+          {/* PACK LIST DISPLAY */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><Package size={16}/> Gear Pack List</h3>
-              <button className="text-[10px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded-full">
+              
+              {/* TRIGGER THE MODAL */}
+              <button 
+                onClick={openGearModal}
+                className="text-[10px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded-full"
+              >
                 Modify Gear
               </button>
             </div>
@@ -242,12 +312,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               {event.event_equipment?.length > 0 ? (
                 event.event_equipment.map((item: any, idx: number) => (
                   <div key={idx} className="flex items-center gap-3 p-3 bg-black/30 rounded-xl border border-white/5">
-                    <div className="shrink-0 w-8 h-8 flex items-center justify-center bg-white/10 rounded-lg text-white text-xs font-black">
+                    <div className="shrink-0 w-8 h-8 flex items-center justify-center bg-purple-600/20 border border-purple-500/30 rounded-lg text-purple-400 text-xs font-black">
                       {item.quantity_allocated}
                     </div>
                     <div className="overflow-hidden">
-                      <p className="font-bold text-sm text-white truncate">{item.inventory.name}</p>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest truncate">{item.inventory.category}</p>
+                      <p className="font-bold text-sm text-white truncate">{item.inventory?.name}</p>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-widest truncate">{item.inventory?.category}</p>
                     </div>
                   </div>
                 ))
@@ -260,8 +330,91 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           </div>
 
         </div>
-
       </div>
+
+      {/* --- GEAR ASSIGNMENT MODAL OVERLAY --- */}
+      {isGearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-white/10 w-full max-w-3xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[90vh] shadow-[0_0_50px_rgba(0,0,0,1)]">
+            
+            {/* Modal Header */}
+            <div className="px-8 py-6 border-b border-white/5 flex justify-between items-center bg-white/5">
+              <div>
+                <h2 className="text-2xl font-black text-white">Route Equipment</h2>
+                <p className="text-sm text-gray-400 mt-1">Assign gear from your inventory to {event.title}</p>
+              </div>
+              <button onClick={() => setIsGearModalOpen(false)} className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Modal Body: Scrollable Inventory List */}
+            <div className="overflow-y-auto p-8 flex-1 space-y-8 custom-scrollbar">
+              {(Object.entries(groupedInventory) as [string, any[]][]).map(([category, items]) => (
+                <div key={category} className="space-y-4">
+                  <h3 className="text-xs font-black text-purple-400 uppercase tracking-[0.2em] border-b border-white/5 pb-2">{category}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {items.map((item: any) => {
+                      const qtyAssigned = allocations[item.id] || 0;
+                      const isAssigned = qtyAssigned > 0;
+
+                      return (
+                        <div key={item.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${isAssigned ? 'bg-purple-900/20 border-purple-500/30' : 'bg-black/40 border-white/5'}`}>
+                          <div className="overflow-hidden pr-2">
+                            <p className={`font-bold text-sm truncate ${isAssigned ? 'text-white' : 'text-gray-300'}`}>{item.name}</p>
+                            <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Owned: {item.quantity}</p>
+                          </div>
+                          
+                          {/* Quantity Controls */}
+                          <div className="flex items-center gap-3 shrink-0 bg-black/50 p-1.5 rounded-xl border border-white/5">
+                            <button 
+                              onClick={() => updateAllocation(item.id, -1, item.quantity)}
+                              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span className={`w-4 text-center text-sm font-black ${isAssigned ? 'text-purple-400' : 'text-gray-500'}`}>
+                              {qtyAssigned}
+                            </span>
+                            <button 
+                              onClick={() => updateAllocation(item.id, 1, item.quantity)}
+                              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-white/5 bg-black/40 flex justify-between items-center">
+              <p className="text-sm font-bold text-gray-400">
+                Total Items Routed: <span className="text-white">{Object.values(allocations).reduce((a, b) => a + b, 0)}</span>
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setIsGearModalOpen(false)} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-white/5 hover:bg-white/10 transition-colors">
+                  Cancel
+                </button>
+                <button 
+                  onClick={saveGearPackList}
+                  disabled={isSavingGear}
+                  className="px-6 py-3 rounded-full text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 transition-all flex items-center gap-2"
+                >
+                  {isSavingGear ? <Loader2 className="animate-spin" size={16} /> : <Package size={16} />}
+                  {isSavingGear ? "Saving Pack List..." : "Save Pack List"}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
