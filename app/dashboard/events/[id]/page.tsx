@@ -6,7 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import { 
   ArrowLeft, MapPin, User, Clock, Package, DollarSign, Edit, Trash2, 
   Mail, Phone, Globe, Navigation, Users, FileText, Download, Music, 
-  ShieldCheck, MessageSquare, Info, UserPlus, FileSignature, CreditCard, X, Plus, Minus, Loader2
+  ShieldCheck, MessageSquare, Info, UserPlus, FileSignature, CreditCard, X, Plus, Minus, Loader2, Check
 } from "lucide-react";
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +22,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [allocations, setAllocations] = useState<Record<string, number>>({});
   const [isSavingGear, setIsSavingGear] = useState(false);
 
-  // Abstracted fetch so we can call it again after saving gear
+  // STAFF MODAL STATE
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [fullStaffList, setFullStaffList] = useState<any[]>([]);
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
+  const [isSavingStaff, setIsSavingStaff] = useState(false);
+
+  // --- DATA FETCHING ---
   const fetchEventDetails = async () => {
     const { data, error } = await supabase
       .from('events')
@@ -54,12 +60,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // --- GEAR ASSIGNMENT LOGIC ---
   const openGearModal = async () => {
     setIsGearModalOpen(true);
-    
-    // 1. Fetch the entire inventory catalogue
     const { data } = await supabase.from('inventory').select('*').order('category');
     if (data) setFullInventory(data);
 
-    // 2. Pre-fill the modal with the gear already assigned to this event
     const currentAllocs: Record<string, number> = {};
     event.event_equipment?.forEach((eq: any) => {
       currentAllocs[eq.inventory_id] = eq.quantity_allocated;
@@ -71,22 +74,16 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     setAllocations(prev => {
       const currentQty = prev[inventoryId] || 0;
       let newQty = currentQty + delta;
-      
-      // Keep boundaries between 0 and the max amount owned
       if (newQty < 0) newQty = 0;
       if (newQty > maxQty) newQty = maxQty;
-      
       return { ...prev, [inventoryId]: newQty };
     });
   };
 
   const saveGearPackList = async () => {
     setIsSavingGear(true);
-
-    // 1. Wipe the current pack list for this event
     await supabase.from('event_equipment').delete().eq('event_id', id);
 
-    // 2. Build the new list of inserts based on what > 0 in the modal
     const inserts = Object.entries(allocations)
       .filter(([invId, qty]) => qty > 0)
       .map(([invId, qty]) => ({
@@ -95,24 +92,82 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         quantity_allocated: qty
       }));
 
-    // 3. Save to database
     if (inserts.length > 0) {
-      const { error } = await supabase.from('event_equipment').insert(inserts);
-      if (error) console.error("Error saving gear:", error);
+      await supabase.from('event_equipment').insert(inserts);
     }
 
-    // 4. Close modal and refresh the background page data
     setIsGearModalOpen(false);
     setIsSavingGear(false);
     fetchEventDetails();
   };
 
+  // --- STAFF ASSIGNMENT LOGIC ---
+  const openStaffModal = async () => {
+    setIsStaffModalOpen(true);
+    
+    // 1. Fetch the full staff roster
+    const { data } = await supabase.from('staff').select('*').eq('status', 'Active').order('role');
+    if (data) setFullStaffList(data);
+
+    // 2. Pre-fill the selected list with staff already attached to this event
+    // The DB stores them as an array of strings (names). For the modal logic, we'll try to match by name, 
+    // but ideally, we should shift to storing staff IDs in the future for perfect relations.
+    const currentStaffNames = event.assigned_staff || [];
+    
+    // If the data comes back in time, map those names to the actual staff IDs so they highlight correctly
+    if (data) {
+       const mappedIds = data
+        .filter(s => currentStaffNames.includes(s.stage_name || s.full_name))
+        .map(s => s.id);
+       setSelectedStaffIds(mappedIds);
+    }
+  };
+
+  const toggleStaffSelection = (staffId: string) => {
+    setSelectedStaffIds(prev => 
+      prev.includes(staffId) 
+        ? prev.filter(id => id !== staffId) 
+        : [...prev, staffId]
+    );
+  };
+
+  const saveStaffList = async () => {
+    setIsSavingStaff(true);
+
+    // We need to map the selected IDs back into the String Array of names the database currently expects
+    const selectedNames = fullStaffList
+      .filter(staff => selectedStaffIds.includes(staff.id))
+      .map(staff => staff.stage_name || staff.full_name);
+
+    // Update the event row
+    const { error } = await supabase
+      .from('events')
+      .update({ assigned_staff: selectedNames })
+      .eq('id', id);
+
+    if (error) {
+      console.error("Error saving staff:", error);
+      alert(error.message);
+    }
+
+    setIsStaffModalOpen(false);
+    setIsSavingStaff(false);
+    fetchEventDetails();
+  };
+
+
   if (isLoading || !event) return <div className="p-20 text-center text-gray-400 font-bold animate-pulse uppercase tracking-widest">Loading Event Profile...</div>;
 
-  // Group the full inventory by category for the modal
   const groupedInventory = fullInventory.reduce((acc, item: any) => {
     if (!acc[item.category]) acc[item.category] = [];
     acc[item.category].push(item);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  // Group staff by Role for the modal
+  const groupedStaff = fullStaffList.reduce((acc, staff: any) => {
+    if (!acc[staff.role]) acc[staff.role] = [];
+    acc[staff.role].push(staff);
     return acc;
   }, {} as Record<string, any[]>);
 
@@ -234,22 +289,28 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
+          {/* STAFF DISPLAY */}
           <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><UserPlus size={16}/> Crew / Staff</h3>
-              <button className="text-[10px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded-full">
+              
+              {/* TRIGGER THE STAFF MODAL */}
+              <button 
+                onClick={openStaffModal}
+                className="text-[10px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded-full"
+              >
                 Manage Staff
               </button>
             </div>
             
             <div className="space-y-3">
               {event.assigned_staff?.length > 0 ? (
-                event.assigned_staff.map((staff: string, i: number) => (
+                event.assigned_staff.map((staffName: string, i: number) => (
                   <div key={i} className="flex items-center gap-3 p-3 bg-black/30 rounded-xl border border-white/5">
                     <div className="size-8 rounded-full bg-purple-600/20 flex items-center justify-center text-purple-400 font-black text-xs border border-purple-500/30">
-                      {staff.charAt(0).toUpperCase()}
+                      {staffName.charAt(0).toUpperCase()}
                     </div>
-                    <p className="text-sm font-bold text-white">{staff}</p>
+                    <p className="text-sm font-bold text-white">{staffName}</p>
                   </div>
                 ))
               ) : (
@@ -299,7 +360,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><Package size={16}/> Gear Pack List</h3>
               
-              {/* TRIGGER THE MODAL */}
               <button 
                 onClick={openGearModal}
                 className="text-[10px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded-full"
@@ -332,12 +392,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {/* --- GEAR ASSIGNMENT MODAL OVERLAY --- */}
+      {/* --- GEAR ASSIGNMENT MODAL --- */}
       {isGearModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-gray-900 border border-white/10 w-full max-w-3xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[90vh] shadow-[0_0_50px_rgba(0,0,0,1)]">
             
-            {/* Modal Header */}
             <div className="px-8 py-6 border-b border-white/5 flex justify-between items-center bg-white/5">
               <div>
                 <h2 className="text-2xl font-black text-white">Route Equipment</h2>
@@ -348,7 +407,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               </button>
             </div>
 
-            {/* Modal Body: Scrollable Inventory List */}
             <div className="overflow-y-auto p-8 flex-1 space-y-8 custom-scrollbar">
               {(Object.entries(groupedInventory) as [string, any[]][]).map(([category, items]) => (
                 <div key={category} className="space-y-4">
@@ -364,24 +422,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                             <p className={`font-bold text-sm truncate ${isAssigned ? 'text-white' : 'text-gray-300'}`}>{item.name}</p>
                             <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Owned: {item.quantity}</p>
                           </div>
-                          
-                          {/* Quantity Controls */}
                           <div className="flex items-center gap-3 shrink-0 bg-black/50 p-1.5 rounded-xl border border-white/5">
-                            <button 
-                              onClick={() => updateAllocation(item.id, -1, item.quantity)}
-                              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                            >
-                              <Minus size={14} />
-                            </button>
-                            <span className={`w-4 text-center text-sm font-black ${isAssigned ? 'text-purple-400' : 'text-gray-500'}`}>
-                              {qtyAssigned}
-                            </span>
-                            <button 
-                              onClick={() => updateAllocation(item.id, 1, item.quantity)}
-                              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                            >
-                              <Plus size={14} />
-                            </button>
+                            <button onClick={() => updateAllocation(item.id, -1, item.quantity)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Minus size={14} /></button>
+                            <span className={`w-4 text-center text-sm font-black ${isAssigned ? 'text-purple-400' : 'text-gray-500'}`}>{qtyAssigned}</span>
+                            <button onClick={() => updateAllocation(item.id, 1, item.quantity)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Plus size={14} /></button>
                           </div>
                         </div>
                       );
@@ -391,22 +435,82 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               ))}
             </div>
 
-            {/* Modal Footer */}
             <div className="p-6 border-t border-white/5 bg-black/40 flex justify-between items-center">
-              <p className="text-sm font-bold text-gray-400">
-                Total Items Routed: <span className="text-white">{Object.values(allocations).reduce((a, b) => a + b, 0)}</span>
-              </p>
+              <p className="text-sm font-bold text-gray-400">Total Items Routed: <span className="text-white">{Object.values(allocations).reduce((a, b) => a + b, 0)}</span></p>
               <div className="flex gap-3">
-                <button onClick={() => setIsGearModalOpen(false)} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-white/5 hover:bg-white/10 transition-colors">
-                  Cancel
-                </button>
-                <button 
-                  onClick={saveGearPackList}
-                  disabled={isSavingGear}
-                  className="px-6 py-3 rounded-full text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 transition-all flex items-center gap-2"
-                >
+                <button onClick={() => setIsGearModalOpen(false)} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
+                <button onClick={saveGearPackList} disabled={isSavingGear} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 transition-all flex items-center gap-2">
                   {isSavingGear ? <Loader2 className="animate-spin" size={16} /> : <Package size={16} />}
-                  {isSavingGear ? "Saving Pack List..." : "Save Pack List"}
+                  {isSavingGear ? "Saving..." : "Save Pack List"}
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+
+      {/* --- STAFF ASSIGNMENT MODAL --- */}
+      {isStaffModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-white/10 w-full max-w-3xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[90vh] shadow-[0_0_50px_rgba(0,0,0,1)]">
+            
+            <div className="px-8 py-6 border-b border-white/5 flex justify-between items-center bg-white/5">
+              <div>
+                <h2 className="text-2xl font-black text-white">Assign Crew</h2>
+                <p className="text-sm text-gray-400 mt-1">Select staff members from your roster to work this event.</p>
+              </div>
+              <button onClick={() => setIsStaffModalOpen(false)} className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-8 flex-1 space-y-8 custom-scrollbar">
+              {(Object.entries(groupedStaff) as [string, any[]][]).map(([role, members]) => (
+                <div key={role} className="space-y-4">
+                  <h3 className="text-xs font-black text-pink-400 uppercase tracking-[0.2em] border-b border-white/5 pb-2">{role}s</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {members.map((member: any) => {
+                      const isSelected = selectedStaffIds.includes(member.id);
+
+                      return (
+                        <div 
+                          key={member.id} 
+                          onClick={() => toggleStaffSelection(member.id)}
+                          className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer ${isSelected ? 'bg-pink-900/20 border-pink-500/30' : 'bg-black/40 border-white/5 hover:border-white/20'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`size-10 rounded-xl flex items-center justify-center font-black text-white ${isSelected ? 'bg-pink-600' : 'bg-white/10'}`}>
+                              {member.full_name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className={`font-bold text-sm ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                                {member.stage_name || member.full_name}
+                              </p>
+                              {member.stage_name && <p className="text-[10px] text-gray-500 uppercase tracking-widest">{member.full_name}</p>}
+                            </div>
+                          </div>
+                          
+                          {/* Selection Indicator */}
+                          <div className={`size-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-pink-400 bg-pink-400 text-black' : 'border-white/10 text-transparent'}`}>
+                            <Check size={14} className="stroke-[3]" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-6 border-t border-white/5 bg-black/40 flex justify-between items-center">
+              <p className="text-sm font-bold text-gray-400">Total Assigned: <span className="text-white">{selectedStaffIds.length}</span></p>
+              <div className="flex gap-3">
+                <button onClick={() => setIsStaffModalOpen(false)} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
+                <button onClick={saveStaffList} disabled={isSavingStaff} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-pink-600 hover:bg-pink-700 transition-all flex items-center gap-2">
+                  {isSavingStaff ? <Loader2 className="animate-spin" size={16} /> : <UserPlus size={16} />}
+                  {isSavingStaff ? "Saving..." : "Save Crew List"}
                 </button>
               </div>
             </div>

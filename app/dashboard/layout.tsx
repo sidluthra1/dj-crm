@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation"; // Added useRouter
-import { createClient } from "@/utils/supabase/client"; // Added Supabase client
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
 import { 
   Music, 
   LayoutDashboard, 
@@ -14,7 +14,10 @@ import {
   ChevronDown,
   ChevronUp,
   Wrench,
-  Star
+  Star,
+  Ticket,
+  Users,
+  Contact
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -23,21 +26,16 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [isEventsOpen, setIsEventsOpen] = useState(false);
+  const [isMeetingsOpen, setIsMeetingsOpen] = useState(false);
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
 
-  // THE LOGOUT FUNCTION 🚪
   const handleLogout = async () => {
-    // 1. Tell Supabase to destroy the session
     await supabase.auth.signOut();
-    
-    // 2. Send them back to the login page
     router.push("/login");
-    
-    // 3. Force Next.js to refresh so the middleware kicks in immediately
     router.refresh();
   };
 
@@ -60,6 +58,13 @@ export default function DashboardLayout({
             label="Overview" 
             active={pathname === "/dashboard"} 
           />
+
+          <SidebarLink 
+            href="/dashboard/calendar" 
+            icon={<Calendar size={20} />} 
+            label="Global Calendar" 
+            active={pathname === "/dashboard/calendar"} 
+          />
           
           {/* Events Dropdown Menu */}
           <div>
@@ -72,7 +77,7 @@ export default function DashboardLayout({
               }`}
             >
               <div className="flex items-center gap-3">
-                <Calendar size={20} />
+                <Ticket size={20} />
                 Events
               </div>
               {isEventsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -99,6 +104,53 @@ export default function DashboardLayout({
               </div>
             )}
           </div>
+
+          {/* Meetings Dropdown */}
+          <div>
+            <button 
+              onClick={() => setIsMeetingsOpen(!isMeetingsOpen)}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+                pathname.includes("/dashboard/meetings") 
+                  ? "bg-purple-600/20 text-purple-400 border border-purple-500/30" 
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Users size={20} />
+                Meetings
+              </div>
+              {isMeetingsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {isMeetingsOpen && (
+              <div className="flex flex-col gap-2 mt-2 pl-11 pr-4">
+                <Link 
+                  href="/dashboard/meetings/upcoming" 
+                  className={`text-sm font-semibold transition-colors py-1 ${
+                    pathname === "/dashboard/meetings/upcoming" ? "text-purple-400" : "text-gray-500 hover:text-white"
+                  }`}
+                >
+                  Upcoming
+                </Link>
+                <Link 
+                  href="/dashboard/meetings/previous" 
+                  className={`text-sm font-semibold transition-colors py-1 ${
+                    pathname === "/dashboard/meetings/previous" ? "text-purple-400" : "text-gray-500 hover:text-white"
+                  }`}
+                >
+                  Past Meetings
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* NEW STAFF TAB */}
+          <SidebarLink 
+            href="/dashboard/staff" 
+            icon={<Contact size={20} />} 
+            label="Team & Staff" 
+            active={pathname.includes("/dashboard/staff")} 
+          />
 
           {/* Tools Dropdown Menu */}
           <div>
@@ -161,7 +213,7 @@ export default function DashboardLayout({
             href="/dashboard/inventory" 
             icon={<Package size={20} />} 
             label="Inventory" 
-            active={pathname === "/dashboard/inventory"} 
+            active={pathname.includes("/dashboard/inventory")} 
           />
         </nav>
 
@@ -172,7 +224,6 @@ export default function DashboardLayout({
             label="Settings" 
             active={pathname === "/dashboard/settings"}
           />
-          {/* LOGOUT BUTTON WITH onClick HANDLER */}
           <button 
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
