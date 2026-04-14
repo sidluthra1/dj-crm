@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { 
   UserPlus, Mail, Phone, MapPin, Calendar, 
-  FileText, Briefcase, X, Loader2, Music, ShieldCheck
+  FileText, Briefcase, X, Loader2, Music, ShieldCheck, Trash2
 } from "lucide-react";
 
 interface StaffMember {
@@ -60,43 +60,62 @@ export default function StaffPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      alert("Authentication error. Please log in again.");
+    if (!formData.email) {
+      alert("An email address is required to invite a team member.");
       setIsSubmitting(false);
       return;
     }
 
-    const { error } = await supabase.from('staff').insert([{
-      user_id: user.id,
-      stage_name: formData.stage_name || null,
-      full_name: formData.full_name,
-      email: formData.email || null,
-      phone: formData.phone || null,
-      address: formData.address || null,
-      birthday: formData.birthday || null,
-      role: formData.role,
-      contract_url: formData.contract_url || null,
-      status: 'Active'
-    }]);
+    try {
+      // Send the data to our secure Next.js API route
+      const response = await fetch('/api/staff/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
 
-    setIsSubmitting(false);
+      const result = await response.json();
 
-    if (error) {
-      console.error("Error adding staff:", error);
-      alert(error.message);
-    } else {
-      // Reset form, close modal, and refresh data
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to invite staff member");
+      }
+
+      // Success! Reset form, close modal, and refresh data
       setFormData({
         stage_name: "", full_name: "", email: "", phone: "", 
         address: "", birthday: "", role: "DJ", contract_url: ""
       });
       setIsModalOpen(false);
+      fetchStaff();
+      
+      alert(`Success! An invite email has been sent to ${formData.email}.`);
+
+    } catch (error: any) {
+      console.error("Error adding staff:", error);
+      alert(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- DELETE STAFF LOGIC ---
+  const handleDelete = async (id: string, name: string) => {
+    // Prevent accidental clicks
+    if (!window.confirm(`Are you sure you want to remove ${name} from your roster?`)) {
+      return;
+    }
+
+    const { error } = await supabase.from('staff').delete().eq('id', id);
+
+    if (error) {
+      console.error("Error deleting staff:", error);
+      alert("Failed to remove team member: " + error.message);
+    } else {
+      // Refresh the grid
       fetchStaff();
     }
   };
@@ -162,6 +181,15 @@ export default function StaffPage() {
                     )}
                   </div>
                 </div>
+                
+                {/* DELETE BUTTON */}
+                <button 
+                  onClick={() => handleDelete(member.id, member.stage_name || member.full_name)}
+                  className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-colors"
+                  title="Remove Team Member"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
 
               <div className="flex gap-2 mb-6">
