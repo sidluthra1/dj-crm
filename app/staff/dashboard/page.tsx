@@ -39,10 +39,14 @@ export default function StaffDashboard() {
         const searchName = staffProfile.stage_name || staffProfile.full_name;
 
         // 3. Get ONLY the events they are assigned to
+        // If staff members have multiple names (stage vs full), it's better to check both
+        const searchNames = [staffProfile.full_name];
+        if (staffProfile.stage_name) searchNames.push(staffProfile.stage_name);
+
         const { data: assignedEvents } = await supabase
           .from('events')
           .select('*')
-          .contains('assigned_staff', [searchName]) // This looks inside the Postgres array!
+          .overlaps('assigned_staff', searchNames) // This looks inside the Postgres array!
           .order('event_date', { ascending: true });
 
         if (assignedEvents) {

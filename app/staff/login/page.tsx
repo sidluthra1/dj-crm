@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Music, Mail, Lock, Loader2, ArrowRight, CheckCircle } from "lucide-react";
 
-export default function StaffLoginPage() {
+function StaffLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -118,4 +118,12 @@ export default function StaffLoginPage() {
       </div>
     </div>
   );
+}
+
+export default function StaffLoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-purple-400 font-bold uppercase tracking-widest animate-pulse">Loading Portal...</div>}>
+      <StaffLoginForm />
+    </Suspense>
+  )
 }
