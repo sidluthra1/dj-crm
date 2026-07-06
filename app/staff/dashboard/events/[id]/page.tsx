@@ -3,222 +3,261 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { 
-  ArrowLeft, MapPin, Clock, Package, 
-  Navigation, Users, FileText, Download, Music, 
-  ShieldCheck, MessageSquare
+import {
+  ArrowLeft, Clock, MapPin, Package, ShieldCheck, Users, MessageSquare, Navigation,
 } from "lucide-react";
+import { Badge, Card, SkeletonRows, statusTone } from "@/components/ui/kit";
+import { Enter } from "@/components/motion";
 
+interface CrewMember {
+  id: string;
+  full_name: string;
+  stage_name: string | null;
+  role: string;
+}
+
+interface StaffEventDetail {
+  id: string;
+  title: string;
+  event_type: string | null;
+  status: string;
+  event_date: string;
+  setup_time: string | null;
+  event_end_time: string | null;
+  venue_name: string | null;
+  venue_address: string | null;
+  location: string | null;
+  distance_to_venue: string | null;
+  travel_time: string | null;
+  guest_count: number | null;
+  attire: string | null;
+  client_notes: string | null;
+  event_equipment: {
+    quantity_allocated: number;
+    inventory: { name: string; category: string } | null;
+  }[];
+  event_staff: { staff: CrewMember | null }[];
+}
+
+/**
+ * Staff-facing, read-only event view. RLS only exposes events the logged-in
+ * crew member is assigned to (via event_staff), and only the fields they need.
+ */
 export default function StaffEventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
   const supabase = createClient();
-  const [event, setEvent] = useState<any>(null);
+
+  const [event, setEvent] = useState<StaffEventDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchEventDetails() {
-      // 1. Verify they are logged in
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      // 2. Fetch the event, including the gear pack list
-      const { data, error } = await supabase
-        .from('events')
-        .select(`
-          *,
-          event_equipment (
-            quantity_allocated,
-            inventory (
-              name,
-              category
-            )
-          )
-        `)
-        .eq('id', id)
+    async function fetchEvent() {
+      const { data } = await supabase
+        .from("events")
+        .select(
+          `id, title, event_type, status, event_date, setup_time, event_end_time,
+           venue_name, venue_address, location, distance_to_venue, travel_time,
+           guest_count, attire, client_notes,
+           event_equipment ( quantity_allocated, inventory ( name, category ) ),
+           event_staff ( staff ( id, full_name, stage_name, role ) )`
+        )
+        .eq("id", id)
         .single();
 
-      if (data) setEvent(data);
+      if (data) setEvent(data as unknown as StaffEventDetail);
       setIsLoading(false);
     }
+    fetchEvent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
-    fetchEventDetails();
-  }, [id, router, supabase]);
-
-  if (isLoading || !event) {
-    return <div className="min-h-screen bg-black flex items-center justify-center text-purple-400 font-bold uppercase tracking-widest animate-pulse">Loading Event...</div>;
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-10">
+        <SkeletonRows count={3} height="h-36" />
+      </div>
+    );
   }
 
+  if (!event) {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-20 text-center text-ink-secondary">
+        Event not found, or you&apos;re not assigned to it.
+      </div>
+    );
+  }
+
+  const crew = (event.event_staff || [])
+    .map((es) => es.staff)
+    .filter((s): s is CrewMember => !!s);
+
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-purple-500/30 pb-20">
-      
-      {/* MINIMAL NAVBAR */}
-      <nav className="h-20 border-b border-white/10 bg-white/5 backdrop-blur-md flex items-center px-6 lg:px-12 sticky top-0 z-50">
-        <button onClick={() => router.push('/staff/dashboard')} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors">
-          <ArrowLeft size={16} /> Back to Dashboard
+    <div className="min-h-screen bg-canvas text-ink">
+      <main className="mx-auto max-w-3xl px-5 py-10 pb-20">
+        <button
+          onClick={() => router.push("/staff/dashboard")}
+          className="mb-6 flex items-center gap-2 text-sm font-medium text-ink-secondary transition-colors hover:text-ink"
+        >
+          <ArrowLeft size={15} /> Back to my gigs
         </button>
-      </nav>
 
-      <main className="max-w-5xl mx-auto p-6 lg:p-12 space-y-8">
-        
-        {/* HEADER: High-Level Overview */}
-        <div className="bg-gradient-to-br from-purple-900/30 to-black border border-white/10 rounded-[2.5rem] p-8 md:p-10 relative overflow-hidden">
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="bg-white/10 text-gray-300 border border-white/20 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest inline-block">
-                {event.event_type || "Private Event"}
-              </span>
+        <Enter>
+          <Card className="mb-6 p-7">
+            <div className="mb-3 flex items-center gap-2">
+              <Badge tone={statusTone(event.status)}>{event.status}</Badge>
+              <Badge>{event.event_type || "Private Event"}</Badge>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">{event.title}</h1>
-            <div className="flex flex-wrap items-center gap-4 text-sm font-bold text-gray-400">
-               <span className="flex items-center gap-2">
-                 <Clock size={16} className="text-purple-400"/> 
-                 {new Date(event.event_date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-               </span>
-            </div>
-          </div>
-          <div className="absolute right-0 top-0 opacity-5 pointer-events-none translate-x-1/4 -translate-y-1/4">
-             <Music size={400} />
-          </div>
-        </div>
+            <h1 className="text-3xl font-semibold tracking-tight">{event.title}</h1>
+            <p className="mt-2 flex items-center gap-2 text-sm text-ink-secondary">
+              <Clock className="size-4 text-accent" />
+              {new Date(event.event_date).toLocaleDateString([], {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
+          </Card>
+        </Enter>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* COLUMN 1: Timeline & Venue (Span 5) */}
-          <div className="lg:col-span-5 space-y-6">
-            
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 lg:p-8">
-              <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Clock size={16}/> Run of Show</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                  <span className="text-gray-400 text-sm font-bold">Call / Setup Time</span>
-                  <span className="text-purple-400 font-black">{event.setup_time ? new Date(event.setup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'TBD'}</span>
-                </div>
-                <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                  <span className="text-gray-400 text-sm font-bold">Event Start</span>
-                  <span className="text-white font-black">{new Date(event.event_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm font-bold">Event End</span>
-                  <span className="text-gray-300 font-black">{event.event_end_time ? new Date(event.event_end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'TBD'}</span>
-                </div>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {/* Call times */}
+          <Enter delay={0.05}>
+            <Card className="h-full p-6">
+              <SectionLabel>Call times</SectionLabel>
+              <Row label="Setup / load-in" value={fmt(event.setup_time)} strong />
+              <Row label="Event start" value={fmt(event.event_date)} />
+              <Row label="Event end" value={fmt(event.event_end_time)} last />
+              {event.attire && (
+                <p className="mt-4 flex items-center gap-2 rounded-xl bg-[#f0ecfd] px-4 py-3 text-sm font-medium text-[#5b45b0]">
+                  <ShieldCheck size={15} /> Attire: {event.attire}
+                </p>
+              )}
+            </Card>
+          </Enter>
 
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 lg:p-8">
-              <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><MapPin size={16}/> Location Details</h3>
-              <div className="space-y-5">
-                <div>
-                  <p className="text-white font-bold text-lg">{event.venue_name || event.location}</p>
-                  <p className="text-gray-400 text-sm mt-1">{event.venue_address || "Address pending"}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-black/30 p-3 rounded-xl border border-white/5">
-                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1"><Navigation size={12}/> Distance</p>
-                    <p className="text-sm font-bold text-white">{event.distance_to_venue || "TBD"}</p>
-                  </div>
-                  <div className="bg-black/30 p-3 rounded-xl border border-white/5">
-                    <p className="text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1"><Clock size={12}/> Travel Time</p>
-                    <p className="text-sm font-bold text-white">{event.travel_time || "TBD"}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 text-center">
-                <Users className="size-6 text-purple-400 mx-auto mb-2" />
-                <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">Est. Guests</p>
-                <p className="text-xl font-black text-white">{event.guest_count || "-"}</p>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 text-center">
-                <ShieldCheck className="size-6 text-blue-400 mx-auto mb-2" />
-                <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">Attire</p>
-                <p className="text-sm font-bold text-white mt-1">{event.attire || "Standard"}</p>
-              </div>
-            </div>
-
-          </div>
-
-          {/* COLUMN 2: Notes & Gear (Span 7) */}
-          <div className="lg:col-span-7 space-y-6 flex flex-col">
-            
-            {/* Notes Section */}
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 lg:p-8">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2"><MessageSquare size={16}/> Client Requests</h3>
-                  <p className="text-sm text-purple-300/80 italic leading-relaxed bg-purple-900/10 p-5 rounded-2xl border border-purple-500/20">
-                    "{event.client_notes || "No special requests from the client at this time."}"
+          {/* Venue */}
+          <Enter delay={0.1}>
+            <Card className="h-full p-6">
+              <SectionLabel>Venue</SectionLabel>
+              <p className="font-medium">{event.venue_name || event.location || "TBD"}</p>
+              <p className="mt-0.5 text-sm text-ink-secondary">
+                {event.venue_address || "Address not provided"}
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl bg-[#fafafa] p-3">
+                  <p className="mb-1 flex items-center gap-1 text-[11px] text-ink-tertiary">
+                    <Navigation size={11} /> Distance
                   </p>
+                  <p className="font-medium">{event.distance_to_venue || "TBD"}</p>
                 </div>
-
-                <div>
-                  <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileText size={16}/> Run of Show Notes</h3>
-                  <p className="text-sm text-gray-300 leading-relaxed bg-black/30 p-5 rounded-2xl border border-white/5">
-                    {event.internal_notes || "No internal operational notes."}
+                <div className="rounded-xl bg-[#fafafa] p-3">
+                  <p className="mb-1 flex items-center gap-1 text-[11px] text-ink-tertiary">
+                    <Clock size={11} /> Travel time
                   </p>
+                  <p className="font-medium">{event.travel_time || "TBD"}</p>
                 </div>
               </div>
-            </div>
+              {event.venue_address && (
+                <a
+                  href={`https://maps.apple.com/?q=${encodeURIComponent(event.venue_address)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-4 flex items-center gap-2 text-sm font-medium text-accent hover:underline"
+                >
+                  <MapPin size={14} /> Open in Maps
+                </a>
+              )}
+            </Card>
+          </Enter>
 
-            {/* Read-Only Pack List */}
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 lg:p-8 flex-1">
-              <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Package size={16}/> Required Gear</h3>
-              <div className="space-y-3">
-                {event.event_equipment?.length > 0 ? (
-                  event.event_equipment.map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-center gap-3 p-3 bg-black/30 rounded-xl border border-white/5">
-                      <div className="shrink-0 w-8 h-8 flex items-center justify-center bg-purple-600/20 border border-purple-500/30 rounded-lg text-purple-400 text-xs font-black">
-                        {item.quantity_allocated}x
+          {/* Pack list */}
+          <Enter delay={0.15}>
+            <Card className="h-full p-6">
+              <SectionLabel icon={<Package size={13} />}>Gear pack list</SectionLabel>
+              {event.event_equipment?.length > 0 ? (
+                <div className="space-y-2.5">
+                  {event.event_equipment.map((item, i) => (
+                    <div key={i} className="flex items-center gap-3 rounded-xl bg-[#fafafa] p-3">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f0f4ff] text-xs font-semibold text-accent">
+                        {item.quantity_allocated}
                       </div>
-                      <div className="overflow-hidden">
-                        <p className="font-bold text-sm text-white truncate">{item.inventory?.name}</p>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-widest truncate">{item.inventory?.category}</p>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{item.inventory?.name}</p>
+                        <p className="truncate text-xs text-ink-tertiary">
+                          {item.inventory?.category}
+                        </p>
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 bg-black/20 rounded-2xl border border-white/5 border-dashed">
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">No Gear Assigned</p>
-                  </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-xl border border-dashed border-hairline py-5 text-center text-xs font-medium text-ink-tertiary">
+                  No gear routed yet
+                </p>
+              )}
+            </Card>
+          </Enter>
+
+          {/* Crew + notes */}
+          <Enter delay={0.2}>
+            <Card className="h-full p-6">
+              <SectionLabel icon={<Users size={13} />}>Crew on this gig</SectionLabel>
+              <div className="mb-5 flex flex-wrap gap-2">
+                {crew.map((s) => (
+                  <span
+                    key={s.id}
+                    className="rounded-full bg-[#f0f4ff] px-3 py-1.5 text-xs font-medium text-accent"
+                  >
+                    {s.stage_name || s.full_name} · {s.role}
+                  </span>
+                ))}
+                {crew.length === 0 && (
+                  <span className="text-xs text-ink-tertiary">No other crew listed.</span>
                 )}
               </div>
-            </div>
-
-            {/* Safe Documents (No Financials) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <DocButton label="Event Timeline" isAvailable={!!event.timeline_url} />
-               <DocButton label="Music Requests" isAvailable={!!event.music_list_url} icon={<Music size={16}/>} color="text-pink-400" />
-            </div>
-
-          </div>
+              <SectionLabel icon={<MessageSquare size={13} />}>Client notes</SectionLabel>
+              <p className="rounded-xl bg-[#f5f9ff] p-4 text-sm italic leading-relaxed text-ink-secondary">
+                &ldquo;{event.client_notes || "No special requests from the client."}&rdquo;
+              </p>
+            </Card>
+          </Enter>
         </div>
-
       </main>
     </div>
   );
 }
 
-// Reusable Document Button (Matches the main app but styled for staff portal)
-function DocButton({ label, isAvailable, icon = <FileText size={16}/>, color = "text-blue-400" }: any) {
+function fmt(iso: string | null) {
+  if (!iso) return "TBD";
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function SectionLabel({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <button 
-      disabled={!isAvailable}
-      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${
-        isAvailable 
-        ? 'bg-white/5 border-white/10 hover:bg-white/10 cursor-pointer' 
-        : 'bg-black/20 border-white/5 opacity-50 cursor-not-allowed'
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <span className={isAvailable ? color : "text-gray-600"}>{icon}</span>
-        <span className={`text-sm font-bold ${isAvailable ? 'text-white' : 'text-gray-500'}`}>{label}</span>
-      </div>
-      {isAvailable ? <Download size={16} className="text-gray-400" /> : <span className="text-[10px] uppercase font-black text-gray-600 tracking-widest">Pending</span>}
-    </button>
+    <h3 className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+      {icon}
+      {children}
+    </h3>
+  );
+}
+
+function Row({
+  label,
+  value,
+  strong = false,
+  last = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div className={`flex items-center justify-between py-3 ${!last ? "border-b border-black/5" : ""}`}>
+      <span className="text-sm text-ink-secondary">{label}</span>
+      <span className={`text-sm font-semibold ${strong ? "text-accent" : ""}`}>{value}</span>
+    </div>
   );
 }

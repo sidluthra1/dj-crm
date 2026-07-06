@@ -1,10 +1,18 @@
-import { createServerClient } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  // If Supabase's redirect allowlist rejects our redirectTo, it falls back to
+  // the Site URL and the OAuth ?code= lands on "/". Forward it to the callback
+  // so the code is exchanged server-side and the user is routed by tier
+  // instead of being stranded on the landing page.
+  if (request.nextUrl.pathname === "/" && request.nextUrl.searchParams.has("code")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/callback";
+    return NextResponse.redirect(url);
+  }
+
+  let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,60 +20,60 @@ export async function updateSession(request: NextRequest) {
     {
       cookies: {
         getAll() {
-          return request.cookies.getAll()
+          return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
-          )
+          );
         },
       },
     }
-  )
+  );
 
-  // 1. Get the current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard')
-  const isAuthRoute = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup'
+  const path = request.nextUrl.pathname;
+  const isOwnerDashboard = path.startsWith("/dashboard");
+  const isStaffDashboard = path.startsWith("/staff/dashboard");
+  const isAuthRoute = path === "/login" || path === "/signup";
 
-  // 2. THE BOUNCER LOGIC 🛑
-  if (!user && isDashboardRoute) {
-    // Not logged in? Go to login.
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+  const redirect = (pathname: string) => {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname;
+    url.search = "";
+    return NextResponse.redirect(url);
+  };
+
+  // Not logged in: protected areas bounce to the right login page.
+  if (!user) {
+    if (isOwnerDashboard) return redirect("/login");
+    if (isStaffDashboard) return redirect("/staff/login");
+    return supabaseResponse;
   }
 
-  if (user) {
-    // Grab their profile to check their tier
+  // Logged in: only query the profile when a decision depends on it.
+  if (isOwnerDashboard || isAuthRoute) {
     const { data: profile } = await supabase
-      .from('profiles')
-      .select('subscription_tier')
-      .eq('id', user.id)
-      .single()
+      .from("profiles")
+      .select("subscription_tier")
+      .eq("id", user.id)
+      .single();
 
-    const tier = profile?.subscription_tier
+    const tier = profile?.subscription_tier;
 
-    // If they try to access the CRM Dashboard but aren't on the CRM tier
-    if (isDashboardRoute && tier !== 'crm') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/pricing'
-      return NextResponse.redirect(url)
+    if (isOwnerDashboard && tier !== "crm") {
+      return redirect("/pricing");
     }
 
-    // If they are logged in and hit the login/signup page, route them intelligently
     if (isAuthRoute) {
-      const url = request.nextUrl.clone()
-      // Send CRM users to the dashboard, send everyone else to pricing
-      url.pathname = tier === 'crm' ? '/dashboard' : '/pricing'
-      return NextResponse.redirect(url)
+      return redirect(tier === "crm" ? "/dashboard" : "/pricing");
     }
   }
 
-  return supabaseResponse
+  return supabaseResponse;
 }

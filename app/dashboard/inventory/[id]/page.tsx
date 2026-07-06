@@ -1,31 +1,37 @@
 "use client";
 
-import { use, useEffect, useState } from "react"; 
+import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { 
-  ArrowLeft, Edit, MapPin, User, Calendar, Trash2, PackageSearch, Wrench, AlertCircle, Clock, Truck, FileText
+import {
+  ArrowLeft, Edit, MapPin, User, Trash2, Wrench, Clock, Truck, FileText, Save,
 } from "lucide-react";
+import {
+  Button, Card, Badge, Field, Input, Modal, ConfirmModal, SkeletonRows, Textarea,
+} from "@/components/ui/kit";
+import { useToast } from "@/components/toast";
+import { Enter } from "@/components/motion";
+import { cn } from "@/lib/utils";
 
 interface InventoryItem {
   id: string;
   name: string;
   category: string;
   quantity: number;
-  available_quantity: number;
-  repair_quantity: number; 
-  rental_price: number;
-  current_location: string;
-  owner: string;
-  notes: string;
+  repair_quantity: number;
+  rental_price: number | string;
+  current_location: string | null;
+  owner: string | null;
+  notes: string | null;
   event_equipment: {
     quantity_allocated: number;
     events: {
+      id?: string;
       title: string;
-      event_date: string; 
-      setup_time: string | null; 
-      event_end_time: string | null; 
-    }
+      event_date: string;
+      setup_time: string | null;
+      event_end_time: string | null;
+    } | null;
   }[];
 }
 
@@ -33,220 +39,393 @@ export default function InventoryDetailPage({ params }: { params: Promise<{ id: 
   const router = useRouter();
   const { id } = use(params);
   const supabase = createClient();
+  const { toast } = useToast();
 
   const [item, setItem] = useState<InventoryItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Edit modal
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    category: "",
+    quantity: "1",
+    repair_quantity: "0",
+    rental_price: "0",
+    current_location: "",
+    owner: "",
+    notes: "",
+  });
+
+  const fetchItem = useCallback(async () => {
+    const { data } = await supabase
+      .from("inventory")
+      .select(
+        `*, event_equipment ( quantity_allocated, events ( id, title, event_date, setup_time, event_end_time ) )`
+      )
+      .eq("id", id)
+      .single();
+
+    if (data) setItem(data);
+    setIsLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   useEffect(() => {
-    async function fetchItem() {
-      const { data, error } = await supabase
-        .from('inventory')
-        .select(`
-          *,
-          event_equipment (
-            quantity_allocated,
-            events (
-              title,
-              event_date,
-              setup_time,
-              event_end_time
-            )
-          )
-        `)
-        .eq('id', id)
-        .single();
-
-      if (error) console.error("Error fetching item:", error.message);
-      else if (data) setItem(data);
-      setIsLoading(false);
-    }
     fetchItem();
-  }, [id, supabase]);
+  }, [fetchItem]);
 
-  if (isLoading || !item) return <div className="p-20 text-center text-gray-400 font-bold uppercase tracking-widest animate-pulse">Loading...</div>;
+  const openEdit = () => {
+    if (!item) return;
+    setEditForm({
+      name: item.name,
+      category: item.category,
+      quantity: String(item.quantity),
+      repair_quantity: String(item.repair_quantity || 0),
+      rental_price: String(item.rental_price ?? 0),
+      current_location: item.current_location ?? "",
+      owner: item.owner ?? "",
+      notes: item.notes ?? "",
+    });
+    setIsEditOpen(true);
+  };
 
-  // --- TIME-BASED CALCULATIONS ---
+  const saveEdit = async () => {
+    setIsSavingEdit(true);
+    const { error } = await supabase
+      .from("inventory")
+      .update({
+        name: editForm.name,
+        category: editForm.category,
+        quantity: parseInt(editForm.quantity) || 1,
+        repair_quantity: parseInt(editForm.repair_quantity) || 0,
+        rental_price: parseFloat(editForm.rental_price) || 0,
+        current_location: editForm.current_location || null,
+        owner: editForm.owner || null,
+        notes: editForm.notes || null,
+      })
+      .eq("id", id);
+
+    setIsSavingEdit(false);
+    if (error) {
+      toast(error.message, "error");
+      return;
+    }
+    setIsEditOpen(false);
+    toast("Item updated.", "success");
+    fetchItem();
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    const { error } = await supabase.from("inventory").delete().eq("id", id);
+    setIsDeleting(false);
+    if (error) {
+      toast(error.message, "error");
+      return;
+    }
+    toast("Item deleted.", "success");
+    router.push("/dashboard/inventory");
+  };
+
+  if (isLoading || !item) {
+    return (
+      <div className="mx-auto max-w-5xl">
+        <SkeletonRows count={3} height="h-40" />
+      </div>
+    );
+  }
+
+  /* ----- time-based math ----- */
   const now = new Date();
+  const assignments = item.event_equipment?.filter((a) => a.events) || [];
 
-  const activeDeployments = item.event_equipment?.filter(assignment => {
-    const eventStart = new Date(assignment.events.event_date);
-    const setupStart = assignment.events.setup_time ? new Date(assignment.events.setup_time) : eventStart;
-    const end = assignment.events.event_end_time ? new Date(assignment.events.event_end_time) : eventStart;
+  const activeDeployments = assignments.filter((a) => {
+    const eventStart = new Date(a.events!.event_date);
+    const setupStart = a.events!.setup_time ? new Date(a.events!.setup_time) : eventStart;
+    const end = a.events!.event_end_time ? new Date(a.events!.event_end_time) : eventStart;
     return now >= setupStart && now <= end;
-  }) || [];
+  });
 
-  const futureBookings = item.event_equipment?.filter(assignment => {
-    const eventStart = new Date(assignment.events.event_date);
-    const setupStart = assignment.events.setup_time ? new Date(assignment.events.setup_time) : eventStart;
+  const futureBookings = assignments.filter((a) => {
+    const eventStart = new Date(a.events!.event_date);
+    const setupStart = a.events!.setup_time ? new Date(a.events!.setup_time) : eventStart;
     return setupStart > now;
-  }) || [];
+  });
 
-  const currentDeployedCount = activeDeployments.reduce((sum, a) => sum + a.quantity_allocated, 0);
-  const trueAvailableAtWarehouse = item.quantity - item.repair_quantity - currentDeployedCount;
+  const deployedCount = activeDeployments.reduce((sum, a) => sum + a.quantity_allocated, 0);
+  const warehouseQty = item.quantity - (item.repair_quantity || 0) - deployedCount;
 
   return (
-    <div className="max-w-6xl mx-auto pb-12">
-      <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-400 hover:text-white mb-8 text-sm font-bold uppercase tracking-widest transition-colors">
-        <ArrowLeft size={16} /> Back to Inventory
+    <div className="mx-auto max-w-5xl pb-16">
+      <button
+        onClick={() => router.back()}
+        className="mb-6 flex items-center gap-2 text-sm font-medium text-ink-secondary transition-colors hover:text-ink"
+      >
+        <ArrowLeft size={15} /> Back to inventory
       </button>
 
-      {/* Header Profile Section */}
-      <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-md mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <span className="bg-purple-600/20 text-purple-400 border border-purple-500/30 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-4 inline-block">{item.category}</span>
-          <h1 className="text-5xl font-black text-white mb-2">{item.name}</h1>
-          <div className="flex items-center gap-4">
-             <p className="text-2xl text-green-400 font-black">${item.rental_price} <span className="text-sm font-bold text-gray-500 uppercase tracking-tighter">/ day</span></p>
+      {/* Header */}
+      <Enter>
+        <Card className="mb-6 flex flex-col justify-between gap-6 p-7 md:flex-row md:items-center">
+          <div>
+            <Badge tone="violet" className="mb-3">{item.category}</Badge>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{item.name}</h1>
+            <p className="mt-2 text-lg font-semibold text-[#1e7b36]">
+              ${Number(item.rental_price || 0)}
+              <span className="ml-1 text-sm font-normal text-ink-tertiary">/ day</span>
+            </p>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button className="flex items-center gap-2 bg-white/5 border border-white/10 py-3.5 px-6 rounded-full text-sm font-bold text-white hover:bg-white/10 transition-all"><Calendar size={18} /> Remove/Assign to Event</button>
-          <button className="flex items-center gap-2 bg-white/5 border border-white/10 py-3.5 px-6 rounded-full text-sm font-bold text-white hover:bg-white/10 transition-all"><Edit size={18} /> Edit Info</button>
-          <button className="flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 py-3.5 px-6 rounded-full text-sm font-bold hover:bg-red-500/20 transition-all"><Trash2 size={18} /> Delete</button>
-        </div>
-      </div>
-
-      {/* Summary Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Total Owned" value={item.quantity} color="text-white" />
-        <StatCard label="Warehouse" value={trueAvailableAtWarehouse} color="text-green-400" />
-        <StatCard label="At Event / Setup" value={currentDeployedCount} color="text-yellow-400" />
-        <StatCard label="In Repair" value={item.repair_quantity} color="text-red-400" />
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column: Distribution & Logistics */}
-        <div className="lg:col-span-2 space-y-8">
-          
-          {/* Live Status Card */}
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-            <h3 className="text-xl font-bold mb-6 text-white flex items-center gap-2"><MapPin className="text-purple-400" size={20}/> Live Distribution</h3>
-            <div className="space-y-4">
-              <DistributionRow icon={<MapPin className="text-blue-400" />} label="Main Warehouse" sublabel={item.current_location} qty={trueAvailableAtWarehouse} />
-              
-              {activeDeployments.map((a, i) => {
-                  const isSetup = now < new Date(a.events.event_date);
-                  return (
-                    <DistributionRow 
-                      key={i} 
-                      icon={isSetup ? <Truck className="text-orange-400" /> : <Calendar className="text-yellow-400" />} 
-                      label={a.events.title} 
-                      sublabel={isSetup ? "Load-in / Setup Phase" : "Event Live"} 
-                      qty={a.quantity_allocated} 
-                      isYellow={!isSetup}
-                      isOrange={isSetup}
-                    />
-                  );
-              })}
-
-              {item.repair_quantity > 0 && (
-                <DistributionRow icon={<Wrench className="text-red-400" />} label="Maintenance Bench" sublabel="Technical Repair" qty={item.repair_quantity} isRed />
-              )}
-            </div>
+          <div className="flex shrink-0 flex-wrap gap-3">
+            <Button variant="secondary" onClick={openEdit}>
+              <Edit size={15} /> Edit
+            </Button>
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+              <Trash2 size={15} /> Delete
+            </Button>
           </div>
+        </Card>
+      </Enter>
 
-          {/* Logistics Table (Owner/Notes) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-                <h3 className="text-lg font-bold mb-4 text-white flex items-center gap-2"><User className="text-pink-400" size={18}/> Ownership</h3>
-                <p className="text-sm text-gray-400">Assigned Owner:</p>
-                <p className="text-xl font-bold text-white mt-1">{item.owner}</p>
+      {/* Metrics */}
+      <Enter delay={0.05}>
+        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+          <MetricCard label="Total owned" value={item.quantity} />
+          <MetricCard
+            label="In warehouse"
+            value={warehouseQty}
+            className={warehouseQty <= 0 ? "text-[#b25000]" : "text-[#1e7b36]"}
+          />
+          <MetricCard label="At event / setup" value={deployedCount} className="text-[#b25000]" />
+          <MetricCard label="In repair" value={item.repair_quantity || 0} className="text-[#c30010]" />
+        </div>
+      </Enter>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Details */}
+        <Enter delay={0.1}>
+          <Card className="h-full p-6">
+            <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+              Details
+            </h3>
+            <div className="space-y-4 text-sm">
+              <DetailRow icon={<MapPin size={15} />} label="Location" value={item.current_location || "Main Warehouse"} />
+              <DetailRow icon={<User size={15} />} label="Owner" value={item.owner || "Company"} />
+              <DetailRow icon={<Wrench size={15} />} label="In repair" value={`${item.repair_quantity || 0} units`} />
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-                <h3 className="text-lg font-bold mb-4 text-white flex items-center gap-2"><FileText className="text-blue-400" size={18}/> Internal Notes</h3>
-                <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap italic">
-                    {item.notes || "No internal notes provided for this unit."}
+            {item.notes && (
+              <>
+                <h3 className="mb-2 mt-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                  <FileText size={13} /> Notes
+                </h3>
+                <p className="rounded-xl bg-[#fafafa] p-4 text-sm leading-relaxed text-ink-secondary">
+                  {item.notes}
                 </p>
-            </div>
-          </div>
-        </div>
+              </>
+            )}
+          </Card>
+        </Enter>
 
-{/* Right Column: Future Timeline */}
-        <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-          <h3 className="text-xl font-bold mb-6 text-white flex items-center gap-2">
-            <Clock className="text-purple-400" size={20}/> Upcoming Reservations
-          </h3>
-          <div className="space-y-4">
-            {futureBookings.length > 0 ? futureBookings.map((a, i) => (
-              <div key={i} className="p-5 bg-white/5 rounded-2xl border border-white/10 group hover:bg-white/10 transition-all">
-                <p className="text-base font-bold text-white mb-2 group-hover:text-purple-400 transition-colors">
-                  {a.events.title}
+        {/* Deployments */}
+        <Enter delay={0.15} className="lg:col-span-2">
+          <Card className="h-full p-6">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+              <Truck size={13} /> Deployments & bookings
+            </h3>
+
+            {activeDeployments.length === 0 && futureBookings.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-hairline py-10 text-center">
+                <p className="text-sm font-medium text-ink-tertiary">
+                  This item isn&apos;t routed to any events.
                 </p>
-                
-                <div className="space-y-2 text-xs font-medium">
-                  {/* Setup Time */}
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="flex items-center gap-2"><Truck size={14} className="text-orange-400"/> Setup</span>
-                    <span className="text-white">
-                      {new Date(a.events.setup_time || a.events.event_date).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'})}
-                    </span>
-                  </div>
-
-                  {/* Start Time */}
-                  <div className="flex items-center justify-between text-gray-400">
-                    <span className="flex items-center gap-2"><Calendar size={14} className="text-yellow-400"/> Event Start</span>
-                    <span className="text-white">
-                      {new Date(a.events.event_date).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'})}
-                    </span>
-                  </div>
-
-                  {/* End Time */}
-                  <div className="flex items-center justify-between text-gray-400 pt-1 border-t border-white/5">
-                    <span className="flex items-center gap-2"><Clock size={14} className="text-blue-400"/> Return / End</span>
-                    <span className="text-white">
-                      {a.events.event_end_time 
-                        ? new Date(a.events.event_end_time).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'})
-                        : "No End Set"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 font-mono">Reserved Qty</span>
-                    <span className="px-3 py-1 bg-white/10 rounded-lg text-sm font-black text-white">{a.quantity_allocated}</span>
-                </div>
               </div>
-            )) : (
-              <div className="text-center py-10">
-                  <p className="text-sm text-gray-500 italic">No future reservations found.</p>
+            ) : (
+              <div className="space-y-5">
+                {activeDeployments.length > 0 && (
+                  <BookingGroup
+                    title="Out right now"
+                    items={activeDeployments}
+                    live
+                    onOpen={(eid) => eid && router.push(`/dashboard/events/${eid}`)}
+                  />
+                )}
+                {futureBookings.length > 0 && (
+                  <BookingGroup
+                    title="Upcoming bookings"
+                    items={futureBookings}
+                    onOpen={(eid) => eid && router.push(`/dashboard/events/${eid}`)}
+                  />
+                )}
               </div>
             )}
+          </Card>
+        </Enter>
+      </div>
+
+      {/* Edit modal */}
+      <Modal
+        open={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        title="Edit equipment"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit} loading={isSavingEdit}>
+              {!isSavingEdit && <Save size={15} />}
+              {isSavingEdit ? "Saving..." : "Save changes"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Item name">
+            <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Category">
+              <Input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} />
+            </Field>
+            <Field label="Rental price / day ($)">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={editForm.rental_price}
+                onChange={(e) => setEditForm({ ...editForm, rental_price: e.target.value })}
+              />
+            </Field>
           </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Quantity owned">
+              <Input
+                type="number"
+                min="0"
+                value={editForm.quantity}
+                onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+              />
+            </Field>
+            <Field label="Units in repair">
+              <Input
+                type="number"
+                min="0"
+                value={editForm.repair_quantity}
+                onChange={(e) => setEditForm({ ...editForm, repair_quantity: e.target.value })}
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Location">
+              <Input
+                value={editForm.current_location}
+                onChange={(e) => setEditForm({ ...editForm, current_location: e.target.value })}
+              />
+            </Field>
+            <Field label="Owner">
+              <Input value={editForm.owner} onChange={(e) => setEditForm({ ...editForm, owner: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Notes">
+            <Textarea
+              rows={3}
+              value={editForm.notes}
+              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+            />
+          </Field>
         </div>
+      </Modal>
 
-      </div>
+      <ConfirmModal
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+        title="Delete this item?"
+        description={`"${item.name}" will be removed from inventory and from any event pack lists.`}
+        loading={isDeleting}
+      />
     </div>
   );
 }
 
-// Sub-components
-function StatCard({ label, value, color }: any) {
+/* ---------- helpers ---------- */
+
+function MetricCard({ label, value, className }: { label: string; value: number; className?: string }) {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 text-center backdrop-blur-sm">
-      <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2">{label}</p>
-      <p className={`text-4xl font-black ${color}`}>{value}</p>
+    <Card className="p-5 text-center">
+      <p className={cn("text-2xl font-semibold tracking-tight", className)}>{value}</p>
+      <p className="mt-1 text-xs text-ink-tertiary">{label}</p>
+    </Card>
+  );
+}
+
+function DetailRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="flex items-center gap-2 text-ink-secondary">
+        <span className="text-ink-tertiary">{icon}</span> {label}
+      </span>
+      <span className="font-medium">{value}</span>
     </div>
   );
 }
 
-function DistributionRow({ icon, label, sublabel, qty, isYellow, isOrange, isRed }: any) {
-  let bgColor = "bg-white/5 border-white/5";
-  if (isYellow) bgColor = "bg-yellow-500/10 border-yellow-500/20";
-  if (isOrange) bgColor = "bg-orange-500/10 border-orange-500/20";
-  if (isRed) bgColor = "bg-red-500/10 border-red-500/20";
-
+function BookingGroup({
+  title,
+  items,
+  live = false,
+  onOpen,
+}: {
+  title: string;
+  items: InventoryItem["event_equipment"];
+  live?: boolean;
+  onOpen: (eventId?: string) => void;
+}) {
   return (
-    <div className={`flex items-center justify-between p-5 rounded-2xl border ${bgColor} transition-all`}>
-      <div className="flex items-center gap-4 overflow-hidden">
-        <div className="shrink-0">{icon}</div>
-        <div className="overflow-hidden">
-          <p className={`text-sm font-bold truncate ${isYellow ? 'text-yellow-400' : isOrange ? 'text-orange-400' : isRed ? 'text-red-400' : 'text-white'}`}>{label}</p>
-          <p className="text-xs text-gray-500 truncate">{sublabel}</p>
-        </div>
+    <div>
+      <p className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold">
+        {live && (
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#d70015] opacity-60" />
+            <span className="relative inline-flex size-2 rounded-full bg-[#d70015]" />
+          </span>
+        )}
+        {title}
+      </p>
+      <div className="space-y-2">
+        {items.map((a, i) => (
+          <div
+            key={i}
+            onClick={() => onOpen(a.events?.id)}
+            className={cn(
+              "flex cursor-pointer items-center justify-between rounded-xl border p-3.5 transition-all hover:border-accent/30 hover:bg-[#f5f9ff]",
+              live ? "border-[#d70015]/15 bg-[#fff8f8]" : "border-black/5 bg-[#fafafa]"
+            )}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-[#f0f4ff] text-xs font-semibold text-accent">
+                {a.quantity_allocated}
+              </div>
+              <div>
+                <p className="text-sm font-medium">{a.events?.title}</p>
+                <p className="flex items-center gap-1 text-xs text-ink-tertiary">
+                  <Clock size={11} />
+                  {a.events &&
+                    new Date(a.events.event_date).toLocaleDateString([], {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-medium text-accent">View →</span>
+          </div>
+        ))}
       </div>
-      <span className={`text-xl font-black shrink-0 ml-4 ${isYellow ? 'text-yellow-400' : isOrange ? 'text-orange-400' : isRed ? 'text-red-400' : 'text-white'}`}>{qty}</span>
     </div>
   );
 }

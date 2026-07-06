@@ -1,243 +1,309 @@
 "use client";
 
-import { useEffect } from "react";
-import { motion } from "framer-motion";
-import { ArrowRight, Zap } from "lucide-react";
+import { useRef } from "react";
 import Link from "next/link";
-import { ElegantShape } from "@/components/ui/shape-landing-hero";
-import AboutSection from "@/components/ui/about-section";
+import { motion, useScroll, useTransform } from "framer-motion";
+import {
+  ArrowRight,
+  CalendarDays,
+  FileSignature,
+  Package,
+  Users,
+  CreditCard,
+  Sparkles,
+  ChevronRight,
+} from "lucide-react";
+import { FadeUp, Stagger, StaggerItem, APPLE_EASE } from "@/components/motion";
+import { Button } from "@/components/ui/kit";
 
-const Navbar = () => {
-  const scrollToSection = (e: React.MouseEvent, id: string) => {
+function Navbar() {
+  const scrollTo = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
-    }
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
-    <nav className="fixed top-0 w-full z-50 px-10 py-6 flex justify-between items-center backdrop-blur-md bg-black/10 border-b border-white/5">
-      <div className="flex-1">
-        <Link href="/" className="text-2xl font-light tracking-[0.2em] uppercase text-white">
+    <nav className="frosted fixed top-0 z-50 w-full border-b border-black/5">
+      <div className="mx-auto flex h-12 max-w-5xl items-center justify-between px-6">
+        <Link href="/" className="text-sm font-semibold tracking-[0.18em] text-ink">
           NEXORA
         </Link>
-      </div>
-      <div className="hidden md:flex flex-1 justify-center items-center gap-10">
-        <a 
-          href="#about" 
-          onClick={(e) => scrollToSection(e, "about")}
-          className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors"
-        >
-          About
-        </a>
-        <a 
-          href="#contact" 
-          onClick={(e) => scrollToSection(e, "contact")}
-          className="text-white font-bold text-sm tracking-wide hover:text-purple-400 transition-colors"
-        >
-          Contact Us
-        </a>
-      </div>
-      <div className="flex-1 flex justify-end">
-        <Link href="/login" className="text-sm font-bold text-white hover:text-purple-400 transition-colors border border-white/20 px-6 py-2 rounded-full hover:bg-white/10">
-          Login
-        </Link>
+        <div className="hidden items-center gap-8 md:flex">
+          <a href="#features" onClick={(e) => scrollTo(e, "features")} className="text-xs text-ink-secondary transition-colors hover:text-ink">
+            Features
+          </a>
+          <Link href="/pricing" className="text-xs text-ink-secondary transition-colors hover:text-ink">
+            Pricing
+          </Link>
+          <a href="#contact" onClick={(e) => scrollTo(e, "contact")} className="text-xs text-ink-secondary transition-colors hover:text-ink">
+            Contact
+          </a>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link href="/login" className="text-xs font-medium text-accent transition-opacity hover:opacity-70">
+            Sign in
+          </Link>
+          <Link
+            href="/signup"
+            className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-hover"
+          >
+            Get started
+          </Link>
+        </div>
       </div>
     </nav>
   );
-};
+}
+
+const FEATURES = [
+  {
+    icon: <CalendarDays className="size-6" />,
+    title: "Every booking, one calendar.",
+    body: "Live, upcoming, and past events in a single timeline — with setup windows, travel time, and venue details attached to each gig.",
+  },
+  {
+    icon: <FileSignature className="size-6" />,
+    title: "Contracts that chase themselves.",
+    body: "Pending contracts and unpaid balances surface automatically on your overview, so nothing slips before the downbeat.",
+  },
+  {
+    icon: <Package className="size-6" />,
+    title: "Know where every speaker is.",
+    body: "Route gear to events with pack lists. NEXORA tracks what's in the warehouse, what's deployed, and what's in repair — in real time.",
+  },
+  {
+    icon: <Users className="size-6" />,
+    title: "Your crew, on the same page.",
+    body: "Invite DJs, MCs, and roadies to their own portal. They see their assigned gigs and pack lists — nothing else.",
+  },
+  {
+    icon: <CreditCard className="size-6" />,
+    title: "Deposits and balances, handled.",
+    body: "Enter the invoice and deposit; NEXORA computes the balance due and reminds you to collect before the event.",
+  },
+  {
+    icon: <Sparkles className="size-6" />,
+    title: "Built by DJs, for DJs.",
+    body: "No generic CRM bloat. Every screen is shaped around how mobile DJ businesses actually run.",
+  },
+];
 
 export default function Home() {
-  useEffect(() => {
-    // Tell the browser NOT to remember the scroll position
-    if ('scrollRestoration' in window.history) {
-      window.history.scrollRestoration = 'manual';
-    }
-    // Force the window to the very top
-    window.scrollTo(0, 0);
-  }, []);
-  
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
+  const imgScale = useTransform(scrollYProgress, [0, 1], [1, 1.12]);
+  const imgY = useTransform(scrollYProgress, [0, 1], [0, 60]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+
   return (
     <>
       <Navbar />
-      
-      <main className="bg-[#13131f] text-white min-h-screen">
 
-        {/* HERO SECTION */}
-        <section className="relative h-screen flex items-center overflow-hidden">
-
-          {/* ── Elegant floating shapes (framer-motion) ── */}
-          <ElegantShape delay={0.3} width={500} height={110} rotate={12}  gradient="from-purple-500/[0.12]" className="left-[-8%] top-[18%]" />
-          <ElegantShape delay={0.5} width={320} height={80}  rotate={-10} gradient="from-fuchsia-500/[0.10]" className="left-[5%] bottom-[12%]" />
-          <ElegantShape delay={0.6} width={180} height={50}  rotate={20}  gradient="from-violet-500/[0.12]" className="left-[30%] top-[8%]" />
-
-          {/* ── Decorative corner brackets ── */}
-          <div className="pointer-events-none absolute top-[4.5rem] right-5 w-24 h-24 border-t-[1.5px] border-r-[1.5px] border-white/20" />
-          <div className="pointer-events-none absolute top-[5.5rem] right-9 w-14 h-14 border-t border-r border-white/10" />
-          <div className="pointer-events-none absolute bottom-10 left-6 w-20 h-20 border-b-[1.5px] border-l-[1.5px] border-white/20" />
-
-          {/* ── Neon accent lines ── */}
-          <div className="pointer-events-none absolute bottom-28 right-0 w-52 h-[1.5px] bg-gradient-to-l from-fuchsia-500/75 to-transparent" />
-          <div className="pointer-events-none absolute bottom-20 right-0 w-32 h-[1px] bg-gradient-to-l from-purple-400/50 to-transparent" />
-          <div className="pointer-events-none absolute top-1/2 right-0 -translate-y-1/2 w-[1.5px] h-40 bg-gradient-to-b from-transparent via-purple-500/50 to-transparent" />
-
-          {/* ── Left: text + buttons ── */}
-          <div className="relative z-10 w-1/2 pl-14 pr-4">
+      <main className="bg-canvas text-ink">
+        {/* ============ HERO ============ */}
+        <section ref={heroRef} className="relative overflow-hidden px-6 pb-10 pt-32 md:pt-40">
+          <motion.div style={{ opacity: heroOpacity }} className="mx-auto max-w-4xl text-center">
             <motion.h1
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.4, ease: [0.25, 0.4, 0.25, 1] }}
-              className="text-[4.5rem] md:text-[5.5rem] font-black leading-[1.05] tracking-tight mb-5 text-white"
+              transition={{ duration: 0.9, delay: 0.1, ease: APPLE_EASE }}
+              className="text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl"
             >
-              Your Entire<br />DJ Business
+              Your entire DJ business.
+              <br />
+              <span className="text-gradient-brand">Synced.</span>
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.6, ease: [0.25, 0.4, 0.25, 1] }}
-              className="text-xl font-semibold text-white/70 mb-10 tracking-wide"
+              transition={{ duration: 0.9, delay: 0.3, ease: APPLE_EASE }}
+              className="mx-auto mt-6 max-w-xl text-lg text-ink-secondary md:text-xl"
             >
-              Synced. Performance-Ready.
+              Bookings, contracts, gear, and crew — managed from one beautiful
+              dashboard, so you can focus on the music.
             </motion.p>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.8, ease: [0.25, 0.4, 0.25, 1] }}
-              className="flex items-center gap-4"
+              transition={{ duration: 0.9, delay: 0.5, ease: APPLE_EASE }}
+              className="mt-8 flex items-center justify-center gap-5"
             >
               <Link href="/signup">
-                <button className="group relative flex items-center gap-2 px-7 py-3.5 bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl text-white font-semibold text-base overflow-hidden transition-all duration-300 hover:scale-105 hover:shadow-[0_0_32px_rgba(168,85,247,0.55)]">
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-fuchsia-700 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <Zap className="relative z-10 size-4 fill-current" />
-                  <span className="relative z-10">Get Started</span>
-                </button>
+                <Button size="lg">Get started free</Button>
               </Link>
-              <Link href="/login">
-                <button className="group flex items-center gap-2 px-7 py-3.5 bg-white/5 border border-white/25 rounded-xl text-white font-semibold text-base transition-all duration-300 hover:bg-white/10 hover:border-white/40 hover:scale-105">
-                  <ArrowRight className="size-4 opacity-60 group-hover:translate-x-0.5 transition-transform" />
-                  Login
-                </button>
-              </Link>
+              <a
+                href="#features"
+                className="group inline-flex items-center gap-1 text-[15px] font-medium text-accent"
+              >
+                Learn more
+                <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+              </a>
             </motion.div>
-          </div>
+          </motion.div>
 
-          {/* ── Right: headphones image ── */}
-          <div className="pointer-events-none select-none absolute right-0 top-0 h-full w-1/2 flex items-center justify-center">
-            {/* Large outer glow — fills the right half like the mockup spotlight */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-[700px] h-[700px] rounded-full bg-purple-900/60 blur-[120px]" />
+          {/* Product visual — dark tile, Apple-style */}
+          <motion.div
+            initial={{ opacity: 0, y: 60 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1.1, delay: 0.6, ease: APPLE_EASE }}
+            className="mx-auto mt-16 max-w-5xl"
+          >
+            <div className="relative overflow-hidden rounded-[2rem] bg-[#0b0b0f] shadow-card-hover">
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="h-[420px] w-[420px] rounded-full bg-purple-700/40 blur-[110px]" />
+              </div>
+              <motion.div
+                style={{ scale: imgScale, y: imgY }}
+                className="relative flex items-center justify-center py-14 md:py-20"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/headphones.png"
+                  alt="DJ headphones"
+                  className="w-[440px] max-w-[80%] drop-shadow-[0_20px_60px_rgba(139,92,246,0.5)]"
+                />
+              </motion.div>
+              <div className="relative pb-12 text-center">
+                <p className="text-sm font-medium tracking-[0.2em] text-white/50">
+                  PERFORMANCE-READY
+                </p>
+              </div>
             </div>
-            {/* Tighter inner glow — hot purple core behind the headphones */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-[380px] h-[380px] rounded-full bg-purple-700/45 blur-[70px]" />
-            </div>
-            {/* Floor reflection glow */}
-            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-96 h-10 rounded-full bg-purple-600/40 blur-2xl" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/headphones.png"
-              alt="DJ Headphones"
-              className="relative z-10 w-[580px] max-w-none drop-shadow-[0_8px_60px_rgba(139,92,246,0.6)]"
-            />
-          </div>
-
-          {/* Gradient fade — blends hero glow into the about section below */}
-          <div className="pointer-events-none absolute bottom-0 left-0 w-full h-48 bg-gradient-to-t from-[#13131f] via-[#13131f]/80 to-transparent z-20" />
-
+          </motion.div>
         </section>
 
-        <AboutSection />
-
-        {/* CONTACT SECTION */}
-        <section id="contact" className="relative py-28 px-6 bg-[#13131f] overflow-hidden">
-
-          {/* Ambient glow blobs */}
-          <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 w-[700px] h-[300px] bg-purple-900/25 blur-[100px] rounded-full" />
-          <div className="pointer-events-none absolute top-1/2 left-1/4 w-[300px] h-[300px] bg-fuchsia-900/15 blur-[80px] rounded-full" />
-
-          {/* Decorative corner brackets */}
-          <div className="pointer-events-none absolute bottom-10 right-6 w-20 h-20 border-b-[1.5px] border-r-[1.5px] border-white/15" />
-          <div className="pointer-events-none absolute top-10 left-6 w-20 h-20 border-t-[1.5px] border-l-[1.5px] border-white/15" />
-
-          <div className="relative z-10 max-w-2xl mx-auto">
-
-            {/* Header */}
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, ease: [0.25, 0.4, 0.25, 1] }}
-              className="text-center mb-12"
-            >
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 mb-5">
-                <span className="text-xs text-purple-300 tracking-wide">Get in Touch</span>
-              </div>
-              <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
-                Contact{" "}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-400">
-                  Us
-                </span>
+        {/* ============ FEATURES ============ */}
+        <section id="features" className="px-6 py-24 md:py-32">
+          <div className="mx-auto max-w-5xl">
+            <FadeUp className="mb-16 text-center">
+              <h2 className="text-4xl font-semibold tracking-tight md:text-5xl">
+                Everything between
+                <br />
+                the booking and the encore.
               </h2>
-              <p className="text-white/45 text-lg leading-relaxed">
-                Ready to transform your DJ business? Send us a message and our team will get back to you shortly.
+              <p className="mx-auto mt-4 max-w-lg text-lg text-ink-secondary">
+                One system of record for the business behind your sets.
               </p>
-            </motion.div>
+            </FadeUp>
 
-            {/* Form card */}
-            <motion.form
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.9, delay: 0.15, ease: [0.25, 0.4, 0.25, 1] }}
-              className="relative rounded-2xl border border-white/[0.07] bg-white/[0.03] backdrop-blur-sm p-8 md:p-10 space-y-6"
-            >
-              {/* Subtle inner glow top-right */}
-              <div className="pointer-events-none absolute -top-10 -right-10 w-48 h-48 bg-purple-700/15 blur-[60px] rounded-full" />
+            <Stagger className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {FEATURES.map((f) => (
+                <StaggerItem key={f.title}>
+                  <div className="shadow-card group h-full rounded-[1.5rem] bg-white p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover">
+                    <div className="mb-5 flex size-12 items-center justify-center rounded-2xl bg-[#f0f4ff] text-accent transition-transform duration-300 group-hover:scale-110">
+                      {f.icon}
+                    </div>
+                    <h3 className="mb-2 text-lg font-semibold tracking-tight">{f.title}</h3>
+                    <p className="text-[15px] leading-relaxed text-ink-secondary">{f.body}</p>
+                  </div>
+                </StaggerItem>
+              ))}
+            </Stagger>
+          </div>
+        </section>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-bold text-white/35 uppercase tracking-widest">Name</label>
+        {/* ============ STATS BAND ============ */}
+        <section className="px-6 pb-24">
+          <FadeUp className="mx-auto max-w-5xl">
+            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[2rem] bg-black/5 sm:grid-cols-3">
+              {[
+                { value: "3 min", label: "to log a new booking" },
+                { value: "1 view", label: "for gigs, gear, and crew" },
+                { value: "0", label: "spreadsheets required" },
+              ].map((s) => (
+                <div key={s.label} className="bg-white px-8 py-12 text-center">
+                  <p className="text-gradient-brand text-5xl font-semibold tracking-tight">
+                    {s.value}
+                  </p>
+                  <p className="mt-2 text-[15px] text-ink-secondary">{s.label}</p>
+                </div>
+              ))}
+            </div>
+          </FadeUp>
+        </section>
+
+        {/* ============ CTA ============ */}
+        <section className="px-6 pb-24">
+          <FadeUp className="mx-auto max-w-5xl">
+            <div className="relative overflow-hidden rounded-[2rem] bg-[#0b0b0f] px-8 py-20 text-center">
+              <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-purple-700/30 blur-[100px]" />
+              <h2 className="relative text-3xl font-semibold tracking-tight text-white md:text-5xl">
+                Ready to run a tighter show?
+              </h2>
+              <p className="relative mx-auto mt-4 max-w-md text-lg text-white/60">
+                Start free. Upgrade when the bookings do.
+              </p>
+              <div className="relative mt-8 flex items-center justify-center gap-4">
+                <Link href="/signup">
+                  <Button size="lg">
+                    Get started <ArrowRight className="size-4" />
+                  </Button>
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="text-[15px] font-medium text-white/80 transition-colors hover:text-white"
+                >
+                  See pricing
+                </Link>
+              </div>
+            </div>
+          </FadeUp>
+        </section>
+
+        {/* ============ CONTACT ============ */}
+        <section id="contact" className="px-6 pb-28">
+          <div className="mx-auto max-w-xl">
+            <FadeUp className="mb-10 text-center">
+              <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">Get in touch.</h2>
+              <p className="mt-3 text-[15px] text-ink-secondary">
+                Questions about NEXORA or the Company tier? We&apos;ll get back to you shortly.
+              </p>
+            </FadeUp>
+            <FadeUp delay={0.1}>
+              <form
+                onSubmit={(e) => e.preventDefault()}
+                className="shadow-card space-y-5 rounded-[1.5rem] bg-white p-8"
+              >
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <input
                     type="text"
-                    placeholder="Your Name"
-                    className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-purple-500/60 focus:bg-white/[0.06] transition-all"
+                    placeholder="Your name"
+                    className="rounded-xl border border-hairline px-4 py-3 text-[15px] transition-all focus:border-accent focus:ring-4 focus:ring-accent/10"
                   />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-[11px] font-bold text-white/35 uppercase tracking-widest">Email</label>
                   <input
                     type="email"
-                    placeholder="dj@example.com"
-                    className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-purple-500/60 focus:bg-white/[0.06] transition-all"
+                    placeholder="you@example.com"
+                    className="rounded-xl border border-hairline px-4 py-3 text-[15px] transition-all focus:border-accent focus:ring-4 focus:ring-accent/10"
                   />
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-[11px] font-bold text-white/35 uppercase tracking-widest">Message</label>
                 <textarea
                   rows={4}
                   placeholder="How can we help your business?"
-                  className="bg-white/[0.04] border border-white/[0.08] rounded-xl px-5 py-3.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-purple-500/60 focus:bg-white/[0.06] transition-all resize-none"
+                  className="w-full resize-none rounded-xl border border-hairline px-4 py-3 text-[15px] transition-all focus:border-accent focus:ring-4 focus:ring-accent/10"
                 />
-              </div>
-
-              <button
-                type="submit"
-                className="group relative w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-purple-600 to-fuchsia-600 rounded-xl text-white font-semibold text-sm overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_32px_rgba(168,85,247,0.45)]"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-700 to-fuchsia-700 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="relative z-10">Send Message</span>
-              </button>
-            </motion.form>
+                <Button className="w-full" size="lg" type="submit">
+                  Send message
+                </Button>
+              </form>
+            </FadeUp>
           </div>
         </section>
 
-        <footer className="border-t border-white/[0.06] py-10 text-center bg-[#13131f]">
-          <span className="text-white/25 text-sm tracking-wide">&copy; 2026 NEXORA. All rights reserved.</span>
+        {/* ============ FOOTER ============ */}
+        <footer className="border-t border-black/5 bg-canvas px-6 py-10">
+          <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 text-xs text-ink-tertiary md:flex-row">
+            <span className="font-semibold tracking-[0.18em] text-ink-secondary">NEXORA</span>
+            <div className="flex items-center gap-6">
+              <Link href="/pricing" className="transition-colors hover:text-ink">Pricing</Link>
+              <Link href="/login" className="transition-colors hover:text-ink">Sign in</Link>
+              <Link href="/staff/login" className="transition-colors hover:text-ink">Crew portal</Link>
+            </div>
+            <span>&copy; 2026 NEXORA. All rights reserved.</span>
+          </div>
         </footer>
-
       </main>
     </>
   );

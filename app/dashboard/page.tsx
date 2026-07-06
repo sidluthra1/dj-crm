@@ -1,205 +1,287 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
-import { Calendar, FileText, CreditCard, Users, Clock, AlertCircle } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import {
+  Calendar,
+  FileText,
+  CreditCard,
+  Users,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  ArrowRight,
+} from "lucide-react";
+import { Card, CardTitle, Badge, statusTone, SkeletonRows } from "@/components/ui/kit";
+import { Enter } from "@/components/motion";
+
+interface EventRow {
+  id: string;
+  title: string;
+  event_date: string;
+  status: string;
+  client_name: string | null;
+  pay: number | string | null;
+  deposit_amount: number | string | null;
+  balance_due: number | string | null;
+}
+
+interface ActionItem {
+  id: string;
+  type: "contract" | "payment";
+  message: string;
+  eventId: string;
+}
 
 export default function DashboardOverview() {
   const supabase = createClient();
   const router = useRouter();
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     upcomingGigs: 0,
     pendingContracts: 0,
-    unpaidInvoices: 0,
+    unpaidBalance: 0,
     totalClients: 0,
   });
-  
-  const [nextEvent, setNextEvent] = useState<any>(null);
-  const [actionItems, setActionItems] = useState<{ id: string, type: string, message: string, eventId: string }[]>([]);
+  const [nextEvent, setNextEvent] = useState<EventRow | null>(null);
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
 
   useEffect(() => {
     async function fetchDashboardData() {
-      // Fetch all events to calculate global stats
       const { data: allEvents, error } = await supabase
-        .from('events')
-        .select('*')
-        .order('event_date', { ascending: true });
+        .from("events")
+        .select("id, title, event_date, status, client_name, pay, deposit_amount, balance_due")
+        .order("event_date", { ascending: true });
 
       if (error || !allEvents) {
-        console.error("Error fetching dashboard data:", error);
         setIsLoading(false);
         return;
       }
 
       const now = new Date();
-      now.setHours(0, 0, 0, 0); // Start of today
+      now.setHours(0, 0, 0, 0);
 
-      // 1. Calculate Quick Stats
-      const upcoming = allEvents.filter(e => new Date(e.event_date) >= now);
-      const pendingCount = allEvents.filter(e => e.status === 'Contract Pending').length;
-      
-      // Sum up all balance_due fields
-      const totalUnpaid = allEvents.reduce((sum, e) => sum + (Number(e.balance_due) || 0), 0);
-      
-      // Get unique clients by throwing them into a Set
-      const uniqueClients = new Set(allEvents.map(e => e.client_name).filter(Boolean));
+      const upcoming = allEvents.filter((e) => new Date(e.event_date) >= now);
+      const pendingCount = allEvents.filter((e) => e.status === "Contract Pending").length;
+
+      // Outstanding balance across all events (negative balances ignored).
+      const balanceOf = (e: EventRow) => {
+        const stored = Number(e.balance_due);
+        if (!Number.isNaN(stored) && e.balance_due !== null) return stored;
+        return (Number(e.pay) || 0) - (Number(e.deposit_amount) || 0);
+      };
+      const totalUnpaid = allEvents.reduce((sum, e) => sum + Math.max(balanceOf(e), 0), 0);
+      const uniqueClients = new Set(allEvents.map((e) => e.client_name).filter(Boolean));
 
       setStats({
         upcomingGigs: upcoming.length,
         pendingContracts: pendingCount,
-        unpaidInvoices: totalUnpaid,
+        unpaidBalance: totalUnpaid,
         totalClients: uniqueClients.size,
       });
 
-      // 2. Set the "Next Performance" (first item in the upcoming array)
-      if (upcoming.length > 0) {
-        setNextEvent(upcoming[0]);
-      }
+      if (upcoming.length > 0) setNextEvent(upcoming[0]);
 
-      // 3. Generate Action Items dynamically
-      const actions: { id: string, type: string, message: string, eventId: string }[] = [];
-      
-      allEvents.forEach(e => {
-        // Look for pending contracts
-        if (e.status === 'Contract Pending') {
+      const actions: ActionItem[] = [];
+      allEvents.forEach((e) => {
+        if (e.status === "Contract Pending") {
           actions.push({
             id: `contract-${e.id}`,
-            type: 'contract',
-            message: `Send/Sign contract for ${e.client_name}`,
-            eventId: e.id
+            type: "contract",
+            message: `Send / sign contract for ${e.client_name || e.title}`,
+            eventId: e.id,
           });
         }
-        // Look for upcoming events that still owe money
-        if (Number(e.balance_due) > 0 && new Date(e.event_date) >= now) {
+        const bal = balanceOf(e);
+        if (bal > 0 && new Date(e.event_date) >= now) {
           actions.push({
             id: `payment-${e.id}`,
-            type: 'payment',
-            message: `Collect $${e.balance_due.toFixed(2)} balance for ${e.title}`,
-            eventId: e.id
+            type: "payment",
+            message: `Collect $${bal.toFixed(2)} balance for ${e.title}`,
+            eventId: e.id,
           });
         }
       });
 
-      // Limit to top 5 actions so it doesn't break the UI layout
-      setActionItems(actions.slice(0, 5));
+      setActionItems(actions.slice(0, 6));
       setIsLoading(false);
     }
 
     fetchDashboardData();
-  }, [supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (isLoading) {
-    return <div className="p-20 text-center text-gray-400 font-bold animate-pulse uppercase tracking-widest">Compiling Dashboard...</div>;
+    return (
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="skeleton h-32 rounded-[1.25rem]" />
+          ))}
+        </div>
+        <SkeletonRows count={2} height="h-48" />
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      
-      {/* Welcome Message */}
-      <div>
-        <h2 className="text-3xl font-bold mb-2 text-white">Welcome back to the booth.</h2>
-        <p className="text-gray-400">Here is what's happening with your business today.</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-8">
+      <Enter>
+        <h2 className="text-2xl font-semibold tracking-tight">Welcome back to the booth.</h2>
+        <p className="mt-1 text-[15px] text-ink-secondary">
+          Here&apos;s what&apos;s happening with your business today.
+        </p>
+      </Enter>
 
-      {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Upcoming Gigs" value={stats.upcomingGigs.toString()} icon={<Calendar className="text-purple-400" />} />
-        <StatCard title="Pending Contracts" value={stats.pendingContracts.toString()} icon={<FileText className="text-blue-400" />} />
-        <StatCard title="Unpaid Invoices" value={`$${stats.unpaidInvoices.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<CreditCard className="text-green-400" />} />
-        <StatCard title="Total Clients" value={stats.totalClients.toString()} icon={<Users className="text-pink-400" />} />
-      </div>
+      {/* Quick stats */}
+      <Enter delay={0.05}>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Upcoming gigs"
+            value={stats.upcomingGigs.toString()}
+            icon={<Calendar className="size-5 text-accent" />}
+            tint="bg-[#e8f2ff]"
+          />
+          <StatCard
+            title="Pending contracts"
+            value={stats.pendingContracts.toString()}
+            icon={<FileText className="size-5 text-[#b25000]" />}
+            tint="bg-[#fff3e0]"
+          />
+          <StatCard
+            title="Outstanding balance"
+            value={`$${stats.unpaidBalance.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`}
+            icon={<CreditCard className="size-5 text-[#1e7b36]" />}
+            tint="bg-[#e6f6ea]"
+          />
+          <StatCard
+            title="Total clients"
+            value={stats.totalClients.toString()}
+            icon={<Users className="size-5 text-[#5b45b0]" />}
+            tint="bg-[#f0ecfd]"
+          />
+        </div>
+      </Enter>
 
-      {/* Recent Activity / Next Event Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-        
-        {/* Next Event Widget */}
-        <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-[2rem] p-8 backdrop-blur-sm flex flex-col">
-          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <Calendar className="text-purple-400 size-5" /> Next Performance
-          </h3>
-          
-          {nextEvent ? (
-            <div 
-              onClick={() => router.push(`/dashboard/events/${nextEvent.id}`)}
-              className="bg-black/40 border border-white/5 rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer hover:bg-white/5 transition-colors group flex-1"
-            >
-              <div>
-                <h4 className="text-2xl font-black text-white group-hover:text-purple-300 transition-colors">{nextEvent.title}</h4>
-                <div className="flex items-center gap-4 mt-2 text-sm font-bold text-gray-400">
-                  <span className="flex items-center gap-1"><Clock size={14} className="text-purple-400"/> {new Date(nextEvent.event_date).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}</span>
-                  <span>•</span>
-                  <span>{new Date(nextEvent.event_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Next performance */}
+        <Enter delay={0.1} className="lg:col-span-2">
+          <Card className="flex h-full flex-col p-7">
+            <CardTitle className="mb-5 flex items-center gap-2 text-base">
+              <Calendar className="size-4 text-accent" /> Next performance
+            </CardTitle>
+
+            {nextEvent ? (
+              <div
+                onClick={() => router.push(`/dashboard/events/${nextEvent.id}`)}
+                className="group flex flex-1 cursor-pointer flex-col justify-between gap-5 rounded-2xl border border-black/5 bg-[#fafafa] p-6 transition-all duration-300 hover:border-accent/30 hover:bg-[#f5f9ff] md:flex-row md:items-center"
+              >
+                <div>
+                  <h4 className="text-xl font-semibold tracking-tight transition-colors group-hover:text-accent">
+                    {nextEvent.title}
+                  </h4>
+                  <div className="mt-2 flex items-center gap-3 text-sm text-ink-secondary">
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="size-3.5 text-accent" />
+                      {new Date(nextEvent.event_date).toLocaleDateString([], {
+                        weekday: "long",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <span>•</span>
+                    <span>
+                      {new Date(nextEvent.event_date).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-start gap-2 md:items-end">
+                  <Badge tone={statusTone(nextEvent.status)}>{nextEvent.status}</Badge>
+                  <span className="flex items-center gap-1 text-xs font-medium text-ink-tertiary transition-transform group-hover:translate-x-0.5">
+                    View details <ArrowRight className="size-3" />
+                  </span>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
-                <span className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-full border w-max
-                  ${nextEvent.status === 'Confirmed' ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}
-                `}>
-                  {nextEvent.status}
-                </span>
-                <span className="text-xs text-gray-500 font-bold uppercase tracking-widest group-hover:translate-x-1 transition-transform">View Details →</span>
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-hairline py-12 text-center">
+                <Calendar className="mb-3 size-8 text-ink-tertiary" />
+                <p className="text-sm font-medium text-ink-secondary">
+                  No upcoming performances scheduled.
+                </p>
               </div>
-            </div>
-          ) : (
-            <div className="bg-black/20 border border-white/5 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center flex-1">
-              <Calendar className="size-10 text-gray-600 mb-3" />
-              <p className="text-gray-400 font-bold">No upcoming performances scheduled.</p>
-            </div>
-          )}
-        </div>
+            )}
+          </Card>
+        </Enter>
 
-        {/* Action Items Widget */}
-        <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8 backdrop-blur-sm">
-          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-            <AlertCircle className="text-orange-400 size-5" /> Action Needed
-          </h3>
-          
-          {actionItems.length > 0 ? (
-            <ul className="space-y-4">
-              {actionItems.map((action) => (
-                <li 
-                  key={action.id} 
-                  onClick={() => router.push(`/dashboard/events/${action.eventId}`)}
-                  className="flex items-start gap-3 p-3 -mx-3 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group"
-                >
-                  <div className={`size-2.5 rounded-full mt-1.5 shrink-0 ${action.type === 'payment' ? 'bg-green-400' : 'bg-red-400'}`} />
-                  <p className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors leading-relaxed">
-                    {action.message}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="text-center py-8">
-               <div className="size-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-3">
-                 <Clock className="text-green-400 size-6" />
-               </div>
-               <p className="text-sm font-bold text-gray-400">You're all caught up!</p>
-            </div>
-          )}
-        </div>
-        
+        {/* Action items */}
+        <Enter delay={0.15}>
+          <Card className="h-full p-7">
+            <CardTitle className="mb-5 flex items-center gap-2 text-base">
+              <AlertCircle className="size-4 text-[#b25000]" /> Action needed
+            </CardTitle>
+
+            {actionItems.length > 0 ? (
+              <ul className="space-y-1">
+                {actionItems.map((action) => (
+                  <li
+                    key={action.id}
+                    onClick={() => router.push(`/dashboard/events/${action.eventId}`)}
+                    className="group -mx-2 flex cursor-pointer items-start gap-3 rounded-xl p-2.5 transition-colors hover:bg-black/[0.03]"
+                  >
+                    <div
+                      className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                        action.type === "payment" ? "bg-[#1e7b36]" : "bg-[#b25000]"
+                      }`}
+                    />
+                    <p className="text-sm leading-relaxed text-ink-secondary transition-colors group-hover:text-ink">
+                      {action.message}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="py-10 text-center">
+                <div className="mx-auto mb-3 flex size-11 items-center justify-center rounded-full bg-[#e6f6ea]">
+                  <CheckCircle2 className="size-5 text-[#1e7b36]" />
+                </div>
+                <p className="text-sm font-medium text-ink-secondary">You&apos;re all caught up!</p>
+              </div>
+            )}
+          </Card>
+        </Enter>
       </div>
     </div>
   );
 }
 
-// Helper component for the stat cards
-function StatCard({ title, value, icon }: any) {
+function StatCard({
+  title,
+  value,
+  icon,
+  tint,
+}: {
+  title: string;
+  value: string;
+  icon: ReactNode;
+  tint: string;
+}) {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 backdrop-blur-sm hover:bg-white/10 transition-colors group cursor-default">
-      <div className="flex justify-between items-start mb-4">
-        <div className="p-3 bg-white/5 rounded-xl border border-white/10 group-hover:scale-110 transition-transform">
-          {icon}
-        </div>
+    <Card className="group p-6">
+      <div
+        className={`mb-4 flex size-11 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110 ${tint}`}
+      >
+        {icon}
       </div>
-      <div>
-        <h4 className="text-4xl font-black text-white mb-1 tracking-tight">{value}</h4>
-        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{title}</p>
-      </div>
-    </div>
+      <h4 className="text-3xl font-semibold tracking-tight">{value}</h4>
+      <p className="mt-1 text-[13px] text-ink-secondary">{title}</p>
+    </Card>
   );
 }

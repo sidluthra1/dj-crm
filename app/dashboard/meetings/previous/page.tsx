@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { Users, Plus } from "lucide-react";
-import { PageHeader, Button, EmptyState, SkeletonRows } from "@/components/ui/kit";
+import { Archive } from "lucide-react";
+import { PageHeader, EmptyState, SkeletonRows } from "@/components/ui/kit";
 import { MeetingCard, type MeetingSummary } from "@/components/meeting-card";
 import { Stagger, StaggerItem } from "@/components/motion";
 
-export default function UpcomingMeetingsPage() {
+export default function PreviousMeetingsPage() {
   const router = useRouter();
   const supabase = createClient();
   const [meetings, setMeetings] = useState<MeetingSummary[]>([]);
@@ -22,8 +22,8 @@ export default function UpcomingMeetingsPage() {
       const { data } = await supabase
         .from("meetings")
         .select("*, events ( title )")
-        .gte("meeting_date", startOfDay.toISOString())
-        .order("meeting_date", { ascending: true });
+        .lt("meeting_date", startOfDay.toISOString())
+        .order("meeting_date", { ascending: false });
 
       if (data) setMeetings(data);
       setIsLoading(false);
@@ -34,15 +34,7 @@ export default function UpcomingMeetingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl pb-16">
-      <PageHeader
-        title="Upcoming meetings"
-        subtitle="Client consults, venue walkthroughs, and internal syncs."
-        actions={
-          <Button onClick={() => router.push("/dashboard/meetings/new")}>
-            <Plus size={16} /> Schedule meeting
-          </Button>
-        }
-      />
+      <PageHeader title="Past meetings" subtitle="Your meeting history and completed syncs." />
 
       {isLoading ? (
         <SkeletonRows count={3} height="h-48" />
@@ -59,14 +51,9 @@ export default function UpcomingMeetingsPage() {
         </Stagger>
       ) : (
         <EmptyState
-          icon={<Users className="size-6" />}
-          title="No upcoming meetings"
-          description="Schedule a client consult, venue walkthrough, or team sync."
-          action={
-            <Button onClick={() => router.push("/dashboard/meetings/new")}>
-              <Plus size={16} /> Schedule your first meeting
-            </Button>
-          }
+          icon={<Archive className="size-6" />}
+          title="No past meetings"
+          description="Completed meetings will be archived here."
         />
       )}
     </div>

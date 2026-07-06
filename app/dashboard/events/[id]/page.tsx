@@ -1,543 +1,751 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { 
-  ArrowLeft, MapPin, User, Clock, Package, DollarSign, Edit, Trash2, 
-  Mail, Phone, Globe, Navigation, Users, FileText, Download, Music, 
-  ShieldCheck, MessageSquare, Info, UserPlus, FileSignature, CreditCard, X, Plus, Minus, Loader2, Check
+import {
+  ArrowLeft, MapPin, User, Clock, Package, Edit, Trash2, Mail, Phone, Globe,
+  Navigation, Users, FileText, Download, Music, ShieldCheck, MessageSquare,
+  UserPlus, FileSignature, CreditCard, Plus, Minus, Check,
 } from "lucide-react";
+import {
+  Button, Card, Badge, statusTone, Modal, ConfirmModal, SkeletonRows,
+} from "@/components/ui/kit";
+import { useToast } from "@/components/toast";
+import { Enter } from "@/components/motion";
+import { cn } from "@/lib/utils";
+
+interface StaffRow {
+  id: string;
+  full_name: string;
+  stage_name: string | null;
+  role: string;
+}
+
+interface InventoryRow {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+}
+
+interface EquipmentJoin {
+  inventory_id: string;
+  quantity_allocated: number;
+  inventory: { id: string; name: string; category: string } | null;
+}
+
+interface StaffJoin {
+  staff_id: string;
+  staff: StaffRow | null;
+}
+
+interface EventDetail {
+  id: string;
+  title: string;
+  event_type: string | null;
+  status: string;
+  event_date: string;
+  setup_time: string | null;
+  event_end_time: string | null;
+  pay: number | string | null;
+  deposit_amount: number | string | null;
+  balance_due: number | string | null;
+  client_name: string | null;
+  client_email: string | null;
+  client_phone: string | null;
+  venue_name: string | null;
+  venue_address: string | null;
+  location: string | null;
+  distance_to_venue: string | null;
+  travel_time: string | null;
+  venue_contact_email: string | null;
+  venue_contact_phone: string | null;
+  venue_website: string | null;
+  guest_count: number | null;
+  attire: string | null;
+  client_notes: string | null;
+  internal_notes: string | null;
+  planning_doc_url: string | null;
+  contract_url: string | null;
+  invoice_url: string | null;
+  timeline_url: string | null;
+  music_list_url: string | null;
+  event_equipment: EquipmentJoin[];
+  event_staff: StaffJoin[];
+}
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { id } = use(params);
   const supabase = createClient();
-  const [event, setEvent] = useState<any>(null);
+  const { toast } = useToast();
+
+  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [assignedStaff, setAssignedStaff] = useState<StaffRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // GEAR MODAL STATE
+  // Gear modal
   const [isGearModalOpen, setIsGearModalOpen] = useState(false);
-  const [fullInventory, setFullInventory] = useState<any[]>([]);
+  const [fullInventory, setFullInventory] = useState<InventoryRow[]>([]);
   const [allocations, setAllocations] = useState<Record<string, number>>({});
   const [isSavingGear, setIsSavingGear] = useState(false);
 
-  // STAFF MODAL STATE
+  // Staff modal
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
-  const [fullStaffList, setFullStaffList] = useState<any[]>([]);
+  const [fullStaffList, setFullStaffList] = useState<StaffRow[]>([]);
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [isSavingStaff, setIsSavingStaff] = useState(false);
 
-  // --- DATA FETCHING ---
-  const fetchEventDetails = async () => {
-    const { data, error } = await supabase
-      .from('events')
-      .select(`
-        *,
-        event_equipment (
-          inventory_id,
-          quantity_allocated,
-          inventory (
-            id,
-            name,
-            category,
-            rental_price,
-            quantity
-          )
-        )
-      `)
-      .eq('id', id)
+  // Delete
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const fetchEventDetails = useCallback(async () => {
+    const { data } = await supabase
+      .from("events")
+      .select(
+        `*,
+        event_equipment ( inventory_id, quantity_allocated, inventory ( id, name, category ) ),
+        event_staff ( staff_id, staff ( id, full_name, stage_name, role ) )`
+      )
+      .eq("id", id)
       .single();
 
-    if (data) setEvent(data);
+    if (data) {
+      const detail = data as unknown as EventDetail;
+      setEvent(detail);
+      setAssignedStaff(
+        (detail.event_staff || []).map((es) => es.staff).filter((s): s is StaffRow => !!s)
+      );
+    }
     setIsLoading(false);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   useEffect(() => {
     fetchEventDetails();
-  }, [id, supabase]);
+  }, [fetchEventDetails]);
 
-  // --- GEAR ASSIGNMENT LOGIC ---
+  /* ---------- Gear ---------- */
+
   const openGearModal = async () => {
     setIsGearModalOpen(true);
-    const { data } = await supabase.from('inventory').select('*').order('category');
+    const { data } = await supabase.from("inventory").select("id, name, category, quantity").order("category");
     if (data) setFullInventory(data);
 
-    const currentAllocs: Record<string, number> = {};
-    event.event_equipment?.forEach((eq: any) => {
-      currentAllocs[eq.inventory_id] = eq.quantity_allocated;
+    const current: Record<string, number> = {};
+    event?.event_equipment?.forEach((eq) => {
+      current[eq.inventory_id] = eq.quantity_allocated;
     });
-    setAllocations(currentAllocs);
+    setAllocations(current);
   };
 
   const updateAllocation = (inventoryId: string, delta: number, maxQty: number) => {
-    setAllocations(prev => {
-      const currentQty = prev[inventoryId] || 0;
-      let newQty = currentQty + delta;
-      if (newQty < 0) newQty = 0;
-      if (newQty > maxQty) newQty = maxQty;
-      return { ...prev, [inventoryId]: newQty };
+    setAllocations((prev) => {
+      const next = Math.min(Math.max((prev[inventoryId] || 0) + delta, 0), maxQty);
+      return { ...prev, [inventoryId]: next };
     });
   };
 
   const saveGearPackList = async () => {
     setIsSavingGear(true);
-    await supabase.from('event_equipment').delete().eq('event_id', id);
+    const { error: delError } = await supabase.from("event_equipment").delete().eq("event_id", id);
 
     const inserts = Object.entries(allocations)
-      .filter(([invId, qty]) => qty > 0)
-      .map(([invId, qty]) => ({
-        event_id: id,
-        inventory_id: invId,
-        quantity_allocated: qty
-      }));
+      .filter(([, qty]) => qty > 0)
+      .map(([invId, qty]) => ({ event_id: id, inventory_id: invId, quantity_allocated: qty }));
 
+    let insError = null;
     if (inserts.length > 0) {
-      await supabase.from('event_equipment').insert(inserts);
+      ({ error: insError } = await supabase.from("event_equipment").insert(inserts));
     }
 
-    setIsGearModalOpen(false);
     setIsSavingGear(false);
+    if (delError || insError) {
+      toast((delError || insError)!.message, "error");
+      return;
+    }
+    setIsGearModalOpen(false);
+    toast("Pack list saved.", "success");
     fetchEventDetails();
   };
 
-  // --- STAFF ASSIGNMENT LOGIC ---
+  /* ---------- Staff (event_staff junction — source of truth) ---------- */
+
   const openStaffModal = async () => {
     setIsStaffModalOpen(true);
-    
-    // 1. Fetch the full staff roster
-    const { data } = await supabase.from('staff').select('*').eq('status', 'Active').order('role');
+    const { data } = await supabase
+      .from("staff")
+      .select("id, full_name, stage_name, role")
+      .eq("status", "Active")
+      .order("role");
     if (data) setFullStaffList(data);
-
-    // 2. Pre-fill the selected list with staff already attached to this event
-    // The DB stores them as an array of strings (names). For the modal logic, we'll try to match by name, 
-    // but ideally, we should shift to storing staff IDs in the future for perfect relations.
-    const currentStaffNames = event.assigned_staff || [];
-    
-    // If the data comes back in time, map those names to the actual staff IDs so they highlight correctly
-    if (data) {
-       const mappedIds = data
-        .filter(s => currentStaffNames.includes(s.stage_name || s.full_name))
-        .map(s => s.id);
-       setSelectedStaffIds(mappedIds);
-    }
+    setSelectedStaffIds(assignedStaff.map((s) => s.id));
   };
 
   const toggleStaffSelection = (staffId: string) => {
-    setSelectedStaffIds(prev => 
-      prev.includes(staffId) 
-        ? prev.filter(id => id !== staffId) 
-        : [...prev, staffId]
+    setSelectedStaffIds((prev) =>
+      prev.includes(staffId) ? prev.filter((x) => x !== staffId) : [...prev, staffId]
     );
   };
 
   const saveStaffList = async () => {
     setIsSavingStaff(true);
+    const { error: delError } = await supabase.from("event_staff").delete().eq("event_id", id);
 
-    // We need to map the selected IDs back into the String Array of names the database currently expects
-    const selectedNames = fullStaffList
-      .filter(staff => selectedStaffIds.includes(staff.id))
-      .map(staff => staff.stage_name || staff.full_name);
-
-    // Update the event row
-    const { error } = await supabase
-      .from('events')
-      .update({ assigned_staff: selectedNames })
-      .eq('id', id);
-
-    if (error) {
-      console.error("Error saving staff:", error);
-      alert(error.message);
+    let insError = null;
+    if (selectedStaffIds.length > 0) {
+      ({ error: insError } = await supabase
+        .from("event_staff")
+        .insert(selectedStaffIds.map((staff_id) => ({ event_id: id, staff_id }))));
     }
 
-    setIsStaffModalOpen(false);
     setIsSavingStaff(false);
+    if (delError || insError) {
+      toast((delError || insError)!.message, "error");
+      return;
+    }
+    setIsStaffModalOpen(false);
+    toast("Crew list saved.", "success");
     fetchEventDetails();
   };
 
+  /* ---------- Delete ---------- */
 
-  if (isLoading || !event) return <div className="p-20 text-center text-gray-400 font-bold animate-pulse uppercase tracking-widest">Loading Event Profile...</div>;
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    const { error } = await supabase.from("events").delete().eq("id", id);
+    setIsDeleting(false);
+    if (error) {
+      toast(error.message, "error");
+      return;
+    }
+    toast("Event deleted.", "success");
+    router.push("/dashboard/events/upcoming");
+  };
 
-  const groupedInventory = fullInventory.reduce((acc, item: any) => {
-    if (!acc[item.category]) acc[item.category] = [];
-    acc[item.category].push(item);
+  if (isLoading || !event) {
+    return (
+      <div className="mx-auto max-w-6xl">
+        <SkeletonRows count={3} height="h-44" />
+      </div>
+    );
+  }
+
+  const pay = Number(event.pay) || 0;
+  const deposit = Number(event.deposit_amount) || 0;
+  const balance =
+    event.balance_due !== null && !Number.isNaN(Number(event.balance_due))
+      ? Number(event.balance_due)
+      : pay - deposit;
+
+  const groupedInventory = fullInventory.reduce((acc, item) => {
+    (acc[item.category] ||= []).push(item);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, InventoryRow[]>);
 
-  // Group staff by Role for the modal
-  const groupedStaff = fullStaffList.reduce((acc, staff: any) => {
-    if (!acc[staff.role]) acc[staff.role] = [];
-    acc[staff.role].push(staff);
+  const groupedStaff = fullStaffList.reduce((acc, staff) => {
+    (acc[staff.role] ||= []).push(staff);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, StaffRow[]>);
 
   return (
-    <div className="max-w-7xl mx-auto pb-12 relative">
-      <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-400 hover:text-white mb-8 text-sm font-bold uppercase tracking-widest transition-colors">
-        <ArrowLeft size={16} /> Back to Events
+    <div className="mx-auto max-w-6xl pb-16">
+      <button
+        onClick={() => router.back()}
+        className="mb-6 flex items-center gap-2 text-sm font-medium text-ink-secondary transition-colors hover:text-ink"
+      >
+        <ArrowLeft size={15} /> Back to events
       </button>
 
-      {/* HEADER: High-Level Overview */}
-      <div className="bg-white/5 border border-white/10 rounded-[2.5rem] p-8 backdrop-blur-md mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <div className="flex items-center gap-3 mb-4">
-            <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest inline-block">{event.status}</span>
-            <span className="bg-white/10 text-gray-300 border border-white/20 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest inline-block">{event.event_type || "Private Event"}</span>
-          </div>
-          <h1 className="text-5xl font-black text-white mb-2 tracking-tight">{event.title}</h1>
-          <div className="flex items-center gap-4 text-sm font-bold text-gray-400">
-             <span className="flex items-center gap-2"><Clock size={16} className="text-purple-400"/> {new Date(event.event_date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 bg-white/5 border border-white/10 py-3.5 px-6 rounded-full text-sm font-bold text-white hover:bg-white/10 transition-all"><Edit size={18} /> Edit Profile</button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* COLUMN 1: Logistics, Financials & Venue (Span 4) */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
-            <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><Clock size={16}/> Timeline</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                <span className="text-gray-400 text-sm font-bold">Setup Time</span>
-                <span className="text-white font-black">{event.setup_time ? new Date(event.setup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'TBD'}</span>
-              </div>
-              <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                <span className="text-gray-400 text-sm font-bold">Event Start</span>
-                <span className="text-yellow-400 font-black">{new Date(event.event_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 text-sm font-bold">Event End</span>
-                <span className="text-white font-black">{event.event_end_time ? new Date(event.event_end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'TBD'}</span>
-              </div>
+      {/* Header */}
+      <Enter>
+        <Card className="mb-6 flex flex-col justify-between gap-6 p-7 md:flex-row md:items-center">
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <Badge tone={statusTone(event.status)}>{event.status}</Badge>
+              <Badge>{event.event_type || "Private Event"}</Badge>
             </div>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{event.title}</h1>
+            <p className="mt-2 flex items-center gap-2 text-sm text-ink-secondary">
+              <Clock className="size-4 text-accent" />
+              {new Date(event.event_date).toLocaleDateString([], {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
           </div>
+          <div className="flex shrink-0 gap-3">
+            <Button variant="secondary" onClick={() => router.push(`/dashboard/events/${id}/edit`)}>
+              <Edit size={15} /> Edit
+            </Button>
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+              <Trash2 size={15} /> Delete
+            </Button>
+          </div>
+        </Card>
+      </Enter>
 
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
-            <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><CreditCard size={16}/> Financials</h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                <span className="text-gray-400 text-sm font-bold">Total Invoice</span>
-                <span className="text-white font-black text-lg">${event.pay || "0.00"}</span>
-              </div>
-              <div className="flex justify-between items-center pb-4 border-b border-white/5">
-                <span className="text-gray-400 text-sm font-bold">Deposit Paid</span>
-                <span className="text-green-400 font-black">${event.deposit_amount || "0.00"}</span>
-              </div>
-              <div className="flex justify-between items-center bg-black/30 p-4 rounded-xl border border-white/5">
-                <span className="text-gray-400 text-sm font-bold">Balance Due</span>
-                <span className="text-yellow-400 font-black text-xl">
-                  ${event.balance_due !== null ? event.balance_due : (event.pay - (event.deposit_amount || 0)).toFixed(2)}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Col 1 */}
+        <div className="space-y-6 lg:col-span-4">
+          <Enter delay={0.05}>
+            <Card className="p-6">
+              <SectionLabel icon={<Clock size={14} />}>Timeline</SectionLabel>
+              <InfoRow label="Setup" value={fmtTime(event.setup_time)} />
+              <InfoRow label="Event start" value={fmtTime(event.event_date)} highlight />
+              <InfoRow label="Event end" value={fmtTime(event.event_end_time)} last />
+            </Card>
+          </Enter>
+
+          <Enter delay={0.1}>
+            <Card className="p-6">
+              <SectionLabel icon={<CreditCard size={14} />}>Financials</SectionLabel>
+              <InfoRow label="Total invoice" value={`$${pay.toFixed(2)}`} />
+              <InfoRow label="Deposit paid" value={`$${deposit.toFixed(2)}`} />
+              <div className="mt-4 flex items-center justify-between rounded-xl bg-[#fafafa] px-4 py-3.5">
+                <span className="text-sm text-ink-secondary">Balance due</span>
+                <span
+                  className={cn(
+                    "text-lg font-semibold tracking-tight",
+                    balance > 0 ? "text-[#b25000]" : "text-[#1e7b36]"
+                  )}
+                >
+                  ${balance.toFixed(2)}
                 </span>
               </div>
-            </div>
-          </div>
+            </Card>
+          </Enter>
 
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
-            <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><MapPin size={16}/> Venue & Travel</h3>
-            <div className="space-y-5">
-              <div>
-                <p className="text-white font-bold">{event.venue_name || event.location}</p>
-                <p className="text-gray-400 text-sm">{event.venue_address || "Address not provided"}</p>
+          <Enter delay={0.15}>
+            <Card className="p-6">
+              <SectionLabel icon={<MapPin size={14} />}>Venue & travel</SectionLabel>
+              <p className="font-medium">{event.venue_name || event.location || "TBD"}</p>
+              <p className="mt-0.5 text-sm text-ink-secondary">
+                {event.venue_address || "Address not provided"}
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <MiniStat icon={<Navigation size={12} />} label="Distance" value={event.distance_to_venue || "TBD"} />
+                <MiniStat icon={<Clock size={12} />} label="Travel time" value={event.travel_time || "TBD"} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-black/30 p-3 rounded-xl border border-white/5">
-                  <p className="text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1"><Navigation size={12}/> Distance</p>
-                  <p className="text-sm font-bold text-white">{event.distance_to_venue || "TBD"}</p>
-                </div>
-                <div className="bg-black/30 p-3 rounded-xl border border-white/5">
-                  <p className="text-[10px] text-gray-500 uppercase font-black mb-1 flex items-center gap-1"><Clock size={12}/> Travel Time</p>
-                  <p className="text-sm font-bold text-white">{event.travel_time || "TBD"}</p>
-                </div>
+              <div className="mt-4 space-y-2 border-t border-black/5 pt-4 text-sm text-ink-secondary">
+                <p className="flex items-center gap-2"><Mail size={14} /> {event.venue_contact_email || "No contact listed"}</p>
+                <p className="flex items-center gap-2"><Phone size={14} /> {event.venue_contact_phone || "No phone listed"}</p>
+                {event.venue_website ? (
+                  <a
+                    href={event.venue_website}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 text-accent hover:underline"
+                  >
+                    <Globe size={14} /> Venue website
+                  </a>
+                ) : (
+                  <p className="flex items-center gap-2"><Globe size={14} /> No website listed</p>
+                )}
               </div>
-              <div className="space-y-2 pt-4 border-t border-white/5">
-                <p className="text-xs text-gray-400 flex items-center gap-2"><User size={14}/> {event.venue_contact_email || "No contact listed"}</p>
-                <p className="text-xs text-gray-400 flex items-center gap-2"><Phone size={14}/> {event.venue_contact_phone || "No phone listed"}</p>
-                <p className="text-xs text-purple-400 flex items-center gap-2"><Globe size={14}/> {event.venue_website || "No website listed"}</p>
-              </div>
-            </div>
-          </div>
+            </Card>
+          </Enter>
 
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
-            <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6 flex items-center gap-2"><User size={16}/> Client Info</h3>
-            <div className="space-y-3">
-              <p className="text-white font-bold text-lg">{event.client_name}</p>
-              <p className="text-sm text-gray-400 flex items-center gap-2"><Mail size={16}/> {event.client_email || "Pending"}</p>
-              <p className="text-sm text-gray-400 flex items-center gap-2"><Phone size={16}/> {event.client_phone || "Pending"}</p>
-            </div>
-          </div>
-
+          <Enter delay={0.2}>
+            <Card className="p-6">
+              <SectionLabel icon={<User size={14} />}>Client info</SectionLabel>
+              <p className="text-lg font-medium">{event.client_name}</p>
+              <div className="mt-2 space-y-2 text-sm text-ink-secondary">
+                <p className="flex items-center gap-2"><Mail size={14} /> {event.client_email || "Pending"}</p>
+                <p className="flex items-center gap-2"><Phone size={14} /> {event.client_phone || "Pending"}</p>
+              </div>
+            </Card>
+          </Enter>
         </div>
 
-        {/* COLUMN 2: Details, Staff & Notes (Span 4) */}
-        <div className="lg:col-span-4 space-y-6 flex flex-col">
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 text-center">
-              <Users className="size-6 text-purple-400 mx-auto mb-2" />
-              <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">Est. Guests</p>
-              <p className="text-xl font-black text-white">{event.guest_count || "-"}</p>
+        {/* Col 2 */}
+        <div className="space-y-6 lg:col-span-4">
+          <Enter delay={0.05}>
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="p-5 text-center">
+                <Users className="mx-auto mb-2 size-5 text-accent" />
+                <p className="text-xs text-ink-tertiary">Est. guests</p>
+                <p className="text-xl font-semibold tracking-tight">{event.guest_count || "—"}</p>
+              </Card>
+              <Card className="p-5 text-center">
+                <ShieldCheck className="mx-auto mb-2 size-5 text-[#5b45b0]" />
+                <p className="text-xs text-ink-tertiary">Attire</p>
+                <p className="mt-0.5 text-sm font-medium">{event.attire || "Standard"}</p>
+              </Card>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 text-center">
-              <ShieldCheck className="size-6 text-blue-400 mx-auto mb-2" />
-              <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">Attire</p>
-              <p className="text-sm font-bold text-white mt-1">{event.attire || "Standard"}</p>
-            </div>
-          </div>
+          </Enter>
 
-          {/* STAFF DISPLAY */}
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><UserPlus size={16}/> Crew / Staff</h3>
-              
-              {/* TRIGGER THE STAFF MODAL */}
-              <button 
-                onClick={openStaffModal}
-                className="text-[10px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded-full"
-              >
-                Manage Staff
-              </button>
-            </div>
-            
-            <div className="space-y-3">
-              {event.assigned_staff?.length > 0 ? (
-                event.assigned_staff.map((staffName: string, i: number) => (
-                  <div key={i} className="flex items-center gap-3 p-3 bg-black/30 rounded-xl border border-white/5">
-                    <div className="size-8 rounded-full bg-purple-600/20 flex items-center justify-center text-purple-400 font-black text-xs border border-purple-500/30">
-                      {staffName.charAt(0).toUpperCase()}
+          {/* Crew */}
+          <Enter delay={0.1}>
+            <Card className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <SectionLabel icon={<UserPlus size={14} />} noMargin>Crew / staff</SectionLabel>
+                <Button size="sm" variant="ghost" onClick={openStaffModal}>
+                  Manage
+                </Button>
+              </div>
+              {assignedStaff.length > 0 ? (
+                <div className="space-y-2.5">
+                  {assignedStaff.map((s) => (
+                    <div key={s.id} className="flex items-center gap-3 rounded-xl bg-[#fafafa] p-3">
+                      <div className="flex size-8 items-center justify-center rounded-full bg-[#f0f4ff] text-xs font-semibold text-accent">
+                        {(s.stage_name || s.full_name).charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{s.stage_name || s.full_name}</p>
+                        <p className="text-xs text-ink-tertiary">{s.role}</p>
+                      </div>
                     </div>
-                    <p className="text-sm font-bold text-white">{staffName}</p>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-4 bg-black/20 rounded-xl border border-white/5 border-dashed">
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">No Crew Assigned</p>
+                  ))}
                 </div>
+              ) : (
+                <DashedEmpty>No crew assigned</DashedEmpty>
               )}
-            </div>
-          </div>
+            </Card>
+          </Enter>
 
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 flex-1">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2"><MessageSquare size={16}/> Client / Guest Notes</h3>
-                <p className="text-sm text-purple-300/80 italic leading-relaxed bg-purple-900/10 p-4 rounded-xl border border-purple-500/20">
-                  "{event.client_notes || "No special requests from the client at this time."}"
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2"><FileText size={16}/> Internal Notes</h3>
-                <p className="text-sm text-gray-300 leading-relaxed bg-black/30 p-4 rounded-xl border border-white/5">
-                  {event.internal_notes || "No internal operational notes."}
-                </p>
-              </div>
-            </div>
-          </div>
-
+          <Enter delay={0.15}>
+            <Card className="p-6">
+              <SectionLabel icon={<MessageSquare size={14} />}>Client / guest notes</SectionLabel>
+              <p className="rounded-xl bg-[#f5f9ff] p-4 text-sm italic leading-relaxed text-ink-secondary">
+                &ldquo;{event.client_notes || "No special requests from the client at this time."}&rdquo;
+              </p>
+              <SectionLabel icon={<FileText size={14} />} className="mt-6">Internal notes</SectionLabel>
+              <p className="rounded-xl bg-[#fafafa] p-4 text-sm leading-relaxed text-ink-secondary">
+                {event.internal_notes || "No internal operational notes."}
+              </p>
+            </Card>
+          </Enter>
         </div>
 
-        {/* COLUMN 3: Documents & Gear (Span 4) */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
-            <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest mb-6">Event Files</h3>
-            <div className="space-y-3">
-              <DocButton label="Master Planning Doc" isAvailable={!!event.planning_doc_url} icon={<FileSignature size={16}/>} color="text-yellow-400" />
-              <DocButton label="Contract Agreement" isAvailable={!!event.contract_url} />
-              <DocButton label="Event Invoice" isAvailable={!!event.invoice_url} />
-              <DocButton label="Event Timeline" isAvailable={!!event.timeline_url} />
-              <DocButton label="Music Request List" isAvailable={!!event.music_list_url} icon={<Music size={16}/>} color="text-pink-400" />
-            </div>
-          </div>
+        {/* Col 3 */}
+        <div className="space-y-6 lg:col-span-4">
+          <Enter delay={0.1}>
+            <Card className="p-6">
+              <SectionLabel icon={<FileText size={14} />}>Event files</SectionLabel>
+              <div className="space-y-2.5">
+                <DocButton label="Master planning doc" url={event.planning_doc_url} icon={<FileSignature size={15} />} />
+                <DocButton label="Contract agreement" url={event.contract_url} />
+                <DocButton label="Event invoice" url={event.invoice_url} />
+                <DocButton label="Event timeline" url={event.timeline_url} />
+                <DocButton label="Music request list" url={event.music_list_url} icon={<Music size={15} />} />
+              </div>
+            </Card>
+          </Enter>
 
-          {/* PACK LIST DISPLAY */}
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><Package size={16}/> Gear Pack List</h3>
-              
-              <button 
-                onClick={openGearModal}
-                className="text-[10px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 rounded-full"
-              >
-                Modify Gear
-              </button>
-            </div>
-
-            <div className="space-y-3">
+          {/* Pack list */}
+          <Enter delay={0.15}>
+            <Card className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <SectionLabel icon={<Package size={14} />} noMargin>Gear pack list</SectionLabel>
+                <Button size="sm" variant="ghost" onClick={openGearModal}>
+                  Modify
+                </Button>
+              </div>
               {event.event_equipment?.length > 0 ? (
-                event.event_equipment.map((item: any, idx: number) => (
-                  <div key={idx} className="flex items-center gap-3 p-3 bg-black/30 rounded-xl border border-white/5">
-                    <div className="shrink-0 w-8 h-8 flex items-center justify-center bg-purple-600/20 border border-purple-500/30 rounded-lg text-purple-400 text-xs font-black">
-                      {item.quantity_allocated}
+                <div className="space-y-2.5">
+                  {event.event_equipment.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-3 rounded-xl bg-[#fafafa] p-3">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#f0f4ff] text-xs font-semibold text-accent">
+                        {item.quantity_allocated}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{item.inventory?.name}</p>
+                        <p className="truncate text-xs text-ink-tertiary">{item.inventory?.category}</p>
+                      </div>
                     </div>
-                    <div className="overflow-hidden">
-                      <p className="font-bold text-sm text-white truncate">{item.inventory?.name}</p>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-widest truncate">{item.inventory?.category}</p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-6 bg-black/20 rounded-xl border border-white/5 border-dashed">
-                  <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">No Gear Routed</p>
+                  ))}
                 </div>
+              ) : (
+                <DashedEmpty>No gear routed</DashedEmpty>
               )}
-            </div>
-          </div>
-
+            </Card>
+          </Enter>
         </div>
       </div>
 
-      {/* --- GEAR ASSIGNMENT MODAL --- */}
-      {isGearModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-white/10 w-full max-w-3xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[90vh] shadow-[0_0_50px_rgba(0,0,0,1)]">
-            
-            <div className="px-8 py-6 border-b border-white/5 flex justify-between items-center bg-white/5">
-              <div>
-                <h2 className="text-2xl font-black text-white">Route Equipment</h2>
-                <p className="text-sm text-gray-400 mt-1">Assign gear from your inventory to {event.title}</p>
-              </div>
-              <button onClick={() => setIsGearModalOpen(false)} className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors">
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto p-8 flex-1 space-y-8 custom-scrollbar">
-              {(Object.entries(groupedInventory) as [string, any[]][]).map(([category, items]) => (
-                <div key={category} className="space-y-4">
-                  <h3 className="text-xs font-black text-purple-400 uppercase tracking-[0.2em] border-b border-white/5 pb-2">{category}</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {items.map((item: any) => {
-                      const qtyAssigned = allocations[item.id] || 0;
-                      const isAssigned = qtyAssigned > 0;
-
-                      return (
-                        <div key={item.id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${isAssigned ? 'bg-purple-900/20 border-purple-500/30' : 'bg-black/40 border-white/5'}`}>
-                          <div className="overflow-hidden pr-2">
-                            <p className={`font-bold text-sm truncate ${isAssigned ? 'text-white' : 'text-gray-300'}`}>{item.name}</p>
-                            <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Owned: {item.quantity}</p>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0 bg-black/50 p-1.5 rounded-xl border border-white/5">
-                            <button onClick={() => updateAllocation(item.id, -1, item.quantity)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Minus size={14} /></button>
-                            <span className={`w-4 text-center text-sm font-black ${isAssigned ? 'text-purple-400' : 'text-gray-500'}`}>{qtyAssigned}</span>
-                            <button onClick={() => updateAllocation(item.id, 1, item.quantity)} className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"><Plus size={14} /></button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-6 border-t border-white/5 bg-black/40 flex justify-between items-center">
-              <p className="text-sm font-bold text-gray-400">Total Items Routed: <span className="text-white">{Object.values(allocations).reduce((a, b) => a + b, 0)}</span></p>
-              <div className="flex gap-3">
-                <button onClick={() => setIsGearModalOpen(false)} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
-                <button onClick={saveGearPackList} disabled={isSavingGear} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 transition-all flex items-center gap-2">
-                  {isSavingGear ? <Loader2 className="animate-spin" size={16} /> : <Package size={16} />}
-                  {isSavingGear ? "Saving..." : "Save Pack List"}
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-
-      {/* --- STAFF ASSIGNMENT MODAL --- */}
-      {isStaffModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-white/10 w-full max-w-3xl rounded-[2.5rem] overflow-hidden flex flex-col max-h-[90vh] shadow-[0_0_50px_rgba(0,0,0,1)]">
-            
-            <div className="px-8 py-6 border-b border-white/5 flex justify-between items-center bg-white/5">
-              <div>
-                <h2 className="text-2xl font-black text-white">Assign Crew</h2>
-                <p className="text-sm text-gray-400 mt-1">Select staff members from your roster to work this event.</p>
-              </div>
-              <button onClick={() => setIsStaffModalOpen(false)} className="p-2 text-gray-500 hover:text-white hover:bg-white/10 rounded-full transition-colors">
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto p-8 flex-1 space-y-8 custom-scrollbar">
-              {(Object.entries(groupedStaff) as [string, any[]][]).map(([role, members]) => (
-                <div key={role} className="space-y-4">
-                  <h3 className="text-xs font-black text-pink-400 uppercase tracking-[0.2em] border-b border-white/5 pb-2">{role}s</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {members.map((member: any) => {
-                      const isSelected = selectedStaffIds.includes(member.id);
-
-                      return (
-                        <div 
-                          key={member.id} 
-                          onClick={() => toggleStaffSelection(member.id)}
-                          className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer ${isSelected ? 'bg-pink-900/20 border-pink-500/30' : 'bg-black/40 border-white/5 hover:border-white/20'}`}
+      {/* Gear modal */}
+      <Modal
+        open={isGearModalOpen}
+        onClose={() => setIsGearModalOpen(false)}
+        title="Route equipment"
+        subtitle={`Assign gear from your inventory to ${event.title}`}
+        wide
+        footer={
+          <>
+            <p className="mr-auto text-sm text-ink-secondary">
+              Items routed:{" "}
+              <span className="font-semibold text-ink">
+                {Object.values(allocations).reduce((a, b) => a + b, 0)}
+              </span>
+            </p>
+            <Button variant="secondary" onClick={() => setIsGearModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveGearPackList} loading={isSavingGear}>
+              {isSavingGear ? "Saving..." : "Save pack list"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-7">
+          {Object.entries(groupedInventory).map(([category, items]) => (
+            <div key={category}>
+              <h3 className="mb-3 border-b border-black/5 pb-2 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                {category}
+              </h3>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {items.map((item) => {
+                  const qty = allocations[item.id] || 0;
+                  const isAssigned = qty > 0;
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "flex items-center justify-between rounded-xl border p-3.5 transition-all",
+                        isAssigned ? "border-accent/30 bg-[#f5f9ff]" : "border-black/5 bg-[#fafafa]"
+                      )}
+                    >
+                      <div className="min-w-0 pr-2">
+                        <p className="truncate text-sm font-medium">{item.name}</p>
+                        <p className="text-xs text-ink-tertiary">Owned: {item.quantity}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 rounded-lg border border-black/5 bg-white p-1">
+                        <button
+                          type="button"
+                          onClick={() => updateAllocation(item.id, -1, item.quantity)}
+                          className="flex size-6 items-center justify-center rounded-md text-ink-tertiary transition-colors hover:bg-black/5 hover:text-ink"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className={`size-10 rounded-xl flex items-center justify-center font-black text-white ${isSelected ? 'bg-pink-600' : 'bg-white/10'}`}>
-                              {member.full_name.charAt(0)}
-                            </div>
-                            <div>
-                              <p className={`font-bold text-sm ${isSelected ? 'text-white' : 'text-gray-300'}`}>
-                                {member.stage_name || member.full_name}
-                              </p>
-                              {member.stage_name && <p className="text-[10px] text-gray-500 uppercase tracking-widest">{member.full_name}</p>}
-                            </div>
-                          </div>
-                          
-                          {/* Selection Indicator */}
-                          <div className={`size-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-pink-400 bg-pink-400 text-black' : 'border-white/10 text-transparent'}`}>
-                            <Check size={14} className="stroke-[3]" />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-6 border-t border-white/5 bg-black/40 flex justify-between items-center">
-              <p className="text-sm font-bold text-gray-400">Total Assigned: <span className="text-white">{selectedStaffIds.length}</span></p>
-              <div className="flex gap-3">
-                <button onClick={() => setIsStaffModalOpen(false)} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
-                <button onClick={saveStaffList} disabled={isSavingStaff} className="px-6 py-3 rounded-full text-sm font-bold text-white bg-pink-600 hover:bg-pink-700 transition-all flex items-center gap-2">
-                  {isSavingStaff ? <Loader2 className="animate-spin" size={16} /> : <UserPlus size={16} />}
-                  {isSavingStaff ? "Saving..." : "Save Crew List"}
-                </button>
+                          <Minus size={13} />
+                        </button>
+                        <span className={cn("w-5 text-center text-sm font-semibold", isAssigned ? "text-accent" : "text-ink-tertiary")}>
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateAllocation(item.id, 1, item.quantity)}
+                          className="flex size-6 items-center justify-center rounded-md text-ink-tertiary transition-colors hover:bg-black/5 hover:text-ink"
+                        >
+                          <Plus size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
-          </div>
+          ))}
+          {fullInventory.length === 0 && (
+            <p className="py-6 text-center text-sm text-ink-secondary">
+              No inventory yet — add gear under Inventory first.
+            </p>
+          )}
         </div>
-      )}
+      </Modal>
 
+      {/* Staff modal */}
+      <Modal
+        open={isStaffModalOpen}
+        onClose={() => setIsStaffModalOpen(false)}
+        title="Assign crew"
+        subtitle="Select staff members from your roster to work this event."
+        wide
+        footer={
+          <>
+            <p className="mr-auto text-sm text-ink-secondary">
+              Assigned: <span className="font-semibold text-ink">{selectedStaffIds.length}</span>
+            </p>
+            <Button variant="secondary" onClick={() => setIsStaffModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveStaffList} loading={isSavingStaff}>
+              {isSavingStaff ? "Saving..." : "Save crew list"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-7">
+          {Object.entries(groupedStaff).map(([role, members]) => (
+            <div key={role}>
+              <h3 className="mb-3 border-b border-black/5 pb-2 text-xs font-semibold uppercase tracking-wider text-ink-tertiary">
+                {role}
+              </h3>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {members.map((member) => {
+                  const isSelected = selectedStaffIds.includes(member.id);
+                  return (
+                    <button
+                      type="button"
+                      key={member.id}
+                      onClick={() => toggleStaffSelection(member.id)}
+                      className={cn(
+                        "flex items-center justify-between rounded-xl border p-3.5 text-left transition-all",
+                        isSelected
+                          ? "border-accent/40 bg-[#f5f9ff]"
+                          : "border-black/5 bg-[#fafafa] hover:border-black/15"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            "flex size-9 items-center justify-center rounded-xl text-sm font-semibold",
+                            isSelected ? "bg-accent text-white" : "bg-black/5 text-ink-secondary"
+                          )}
+                        >
+                          {member.full_name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{member.stage_name || member.full_name}</p>
+                          {member.stage_name && (
+                            <p className="text-xs text-ink-tertiary">{member.full_name}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div
+                        className={cn(
+                          "flex size-5 items-center justify-center rounded-full border-2 transition-colors",
+                          isSelected ? "border-accent bg-accent text-white" : "border-black/10 text-transparent"
+                        )}
+                      >
+                        <Check size={12} strokeWidth={3} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {fullStaffList.length === 0 && (
+            <p className="py-6 text-center text-sm text-ink-secondary">
+              No active staff — invite team members under Team &amp; Staff first.
+            </p>
+          )}
+        </div>
+      </Modal>
+
+      <ConfirmModal
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+        title="Delete this event?"
+        description={`"${event.title}" and its pack list / crew assignments will be permanently removed. This cannot be undone.`}
+        loading={isDeleting}
+      />
     </div>
   );
 }
 
-function DocButton({ label, isAvailable, icon = <FileText size={16}/>, color = "text-blue-400" }: any) {
+/* ---------- helpers ---------- */
+
+function fmtTime(iso: string | null) {
+  if (!iso) return "TBD";
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function SectionLabel({
+  icon,
+  children,
+  noMargin = false,
+  className,
+}: {
+  icon: ReactNode;
+  children: ReactNode;
+  noMargin?: boolean;
+  className?: string;
+}) {
   return (
-    <button 
-      disabled={!isAvailable}
-      className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
-        isAvailable 
-        ? 'bg-black/40 border-white/10 hover:bg-white/10 cursor-pointer' 
-        : 'bg-black/20 border-white/5 opacity-50 cursor-not-allowed'
-      }`}
+    <h3
+      className={cn(
+        "flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-tertiary",
+        !noMargin && "mb-4",
+        className
+      )}
     >
-      <div className="flex items-center gap-3">
-        <span className={isAvailable ? color : "text-gray-600"}>{icon}</span>
-        <span className={`text-sm font-bold ${isAvailable ? 'text-white' : 'text-gray-500'}`}>{label}</span>
-      </div>
-      {isAvailable ? <Download size={16} className="text-gray-400" /> : <span className="text-[10px] uppercase font-black text-gray-600 tracking-widest">Pending</span>}
-    </button>
+      {icon}
+      {children}
+    </h3>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  highlight = false,
+  last = false,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between py-3",
+        !last && "border-b border-black/5"
+      )}
+    >
+      <span className="text-sm text-ink-secondary">{label}</span>
+      <span className={cn("text-sm font-semibold", highlight && "text-accent")}>{value}</span>
+    </div>
+  );
+}
+
+function MiniStat({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-[#fafafa] p-3">
+      <p className="mb-1 flex items-center gap-1 text-[11px] font-medium text-ink-tertiary">
+        {icon} {label}
+      </p>
+      <p className="text-sm font-medium">{value}</p>
+    </div>
+  );
+}
+
+function DashedEmpty({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-dashed border-hairline py-5 text-center">
+      <p className="text-xs font-medium text-ink-tertiary">{children}</p>
+    </div>
+  );
+}
+
+function DocButton({
+  label,
+  url,
+  icon = <FileText size={15} />,
+}: {
+  label: string;
+  url: string | null;
+  icon?: ReactNode;
+}) {
+  const available = !!url;
+  return (
+    <a
+      href={available ? url! : undefined}
+      target="_blank"
+      rel="noreferrer"
+      aria-disabled={!available}
+      className={cn(
+        "flex w-full items-center justify-between rounded-xl border p-3.5 transition-all",
+        available
+          ? "border-black/5 bg-[#fafafa] hover:border-accent/30 hover:bg-[#f5f9ff]"
+          : "pointer-events-none border-black/5 bg-[#fafafa] opacity-50"
+      )}
+    >
+      <span className="flex items-center gap-2.5 text-sm font-medium">
+        <span className={available ? "text-accent" : "text-ink-tertiary"}>{icon}</span>
+        {label}
+      </span>
+      {available ? (
+        <Download size={15} className="text-ink-tertiary" />
+      ) : (
+        <span className="text-[11px] font-medium text-ink-tertiary">Pending</span>
+      )}
+    </a>
   );
 }
