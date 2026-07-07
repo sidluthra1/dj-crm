@@ -2,6 +2,8 @@
 
 Guidance for Claude (all model sizes) working in this repo. Read this fully before making changes.
 
+Also read `INSTRUCTIONS.md` (how the owner works: tone, weekly tasks, what good output looks like) and use the playbooks in `skills/` for recurring tasks.
+
 ## What this app is
 
 NEXORA is a SaaS CRM for DJ businesses. One product, three surfaces:
